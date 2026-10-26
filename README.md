@@ -1,0 +1,56 @@
+# Leave By
+
+Know exactly when to leave, with live traffic.
+
+Leave By is a commute-aware day planner. It looks at your classes and shifts, works out the drive between each place, and tells you when to walk out the door — using live traffic from TomTom.
+
+## How it's built
+
+| Piece | What it does |
+| --- | --- |
+| `index.html` | The whole app: home screen, week/month views, menu, splash |
+| `platform.js` | Connects the app to accounts (Supabase) and live traffic (our server) |
+| `api/tomtom.js` | Server function that calls TomTom with a secret key |
+| `api/config.js` | Server function that gives the page its public Supabase settings |
+| `supabase/schema.sql` | Database table with row-level security, so each person only sees their own data |
+
+Hosting: Vercel. Accounts and storage: Supabase with Sign in with Google. Traffic: TomTom.
+
+## Setup
+
+You need free accounts at GitHub, Vercel, Supabase, Google Cloud, and TomTom Developer.
+
+### 1. TomTom key
+1. Sign up at developer.tomtom.com.
+2. Open your dashboard and copy your API key.
+
+### 2. Supabase project
+1. At supabase.com, create a new project (any name, pick a region near you, save the database password somewhere).
+2. Open **SQL Editor → New query**, paste all of `supabase/schema.sql`, and click **Run**.
+3. Open **Project Settings → API** and copy the **Project URL** and the **anon public** key.
+
+### 3. Deploy on Vercel
+1. At vercel.com, choose **Add New → Project**, import the `leave-by` GitHub repo.
+2. Before deploying, open **Environment Variables** and add:
+   - `TOMTOM_KEY` — your TomTom key
+   - `SUPABASE_URL` — your Supabase Project URL
+   - `SUPABASE_ANON_KEY` — your Supabase anon public key
+3. Click **Deploy**. Copy your new address (like `leave-by.vercel.app`).
+
+### 4. Google sign-in
+1. At console.cloud.google.com, create a project called Leave By.
+2. **APIs & Services → OAuth consent screen**: choose **External**, app name "Leave By", your email for support and developer contact. Save. Then click **Publish app** so anyone can sign in.
+3. **Credentials → Create credentials → OAuth client ID** → **Web application**.
+   - Authorized redirect URI: `https://YOUR-PROJECT.supabase.co/auth/v1/callback` (Supabase shows this exact URL on its Google provider page).
+4. Copy the **Client ID** and **Client secret**.
+5. In Supabase: **Authentication → Providers → Google**, turn it on, paste both, save.
+6. In Supabase: **Authentication → URL Configuration**, set **Site URL** to your Vercel address and add it under **Redirect URLs** too.
+
+Open your Vercel address, tap **☰ → Profile → Sign in with Google**, and you're live.
+
+## Not in this version yet
+- **Shift sync from Google Calendar** — needs Google's review for calendar access.
+- **Bus and train comparison** — waiting on a King County Metro (OneBusAway) data key.
+- **Screenshot import** — needs a Claude API key with billing.
+
+These are switched off with `window.FEATURES` in `platform.js` until they're connected.

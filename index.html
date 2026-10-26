@@ -1,0 +1,1093 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Leave By</title>
+<meta name="description" content="Know exactly when to leave, with live traffic.">
+<meta name="theme-color" content="#14111a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Leave By">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<style>
+html{color-scheme:light}
+:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+body{margin:0;font:14px/1.45 system-ui,-apple-system,sans-serif}
+img{max-width:100%}
+[hidden]{display:none!important}
+</style>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Overpass:wght@400;600;800;900&family=Overpass+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: single phone column — highway-sign headline, then a route strip of today's stops, then editable setup below. */
+:root{
+  --bg:#eef1f3; --surface:#ffffff; --fg:#17202a; --muted:#5b6773; --line:#d5dbe0;
+  --sign:#8134af; --sign-fg:#ffffff; --amber:#dd2a7b; --warn-bg:#fff4d6; --warn-fg:#7a5200;
+  --bad-bg:#fde4e1; --bad-fg:#9b2418;
+  --accent:#8134af; --accent-fg:#ffffff; --accent-text:#7a2da6;
+  --grad:linear-gradient(135deg,#5b2bd6 0%,#8134af 30%,#c13584 65%,#e1306c 85%,#f77737 100%);
+  --glow:0 14px 32px -10px rgba(129,52,175,.55);
+  --display:"Overpass","Arial Narrow",system-ui,sans-serif;
+  --body:"Overpass",system-ui,-apple-system,sans-serif;
+  --mono:"Overpass Mono",ui-monospace,Menlo,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#14111a; --surface:#1e1a26; --fg:#ece8f2; --muted:#a199ad; --line:#332c3f;
+  --sign:#8134af; --sign-fg:#ffffff; --amber:#ff5c9e; --warn-bg:#3a2e0e; --warn-fg:#f6d27a;
+  --bad-bg:#40191a; --bad-fg:#ffb4aa; --accent:#9b4dd1; --accent-fg:#ffffff; --accent-text:#d1a3ff;
+  --glow:0 14px 36px -12px rgba(193,53,132,.6); color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#14111a; --surface:#1e1a26; --fg:#ece8f2; --muted:#a199ad; --line:#332c3f;
+  --sign:#8134af; --sign-fg:#ffffff; --amber:#ff5c9e; --warn-bg:#3a2e0e; --warn-fg:#f6d27a;
+  --bad-bg:#40191a; --bad-fg:#ffb4aa; --accent:#9b4dd1; --accent-fg:#ffffff; --accent-text:#d1a3ff;
+  --glow:0 14px 36px -12px rgba(193,53,132,.6); color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font-family:var(--body);font-size:16px;line-height:1.45}
+.wrap{max-width:560px;margin:0 auto;padding-block:20px 48px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:flex;flex-direction:column;gap:20px}
+h1,h2{font-family:var(--display);margin:0;text-wrap:balance}
+.eyebrow{font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.days{display:flex;gap:6px;overflow-x:auto}
+.days{padding-block:2px 4px}
+.days button{flex:1;min-width:44px;min-height:52px;padding:6px 0 4px;border:1px solid var(--line);background:var(--surface);color:var(--fg);border-radius:12px;font:700 14px var(--body);cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:3px}
+.days button .pip{width:6px;height:6px;border-radius:50%;background:var(--amber);opacity:0}
+.days button.has .pip{opacity:1}
+.days button.today{border-color:var(--accent);color:var(--accent-text)}
+.days button[aria-pressed="true"]{background:var(--grad);color:#fff;border-color:transparent;box-shadow:var(--glow)}
+.days button[aria-pressed="true"] .pip{background:#fff}
+.days button:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+
+/* Highway sign */
+.sign{background:var(--grad);color:var(--sign-fg);border-radius:22px;padding:20px 22px;box-shadow:var(--glow)}
+.sign .eyebrow{color:var(--sign-fg);opacity:.9}
+.chip{display:inline-flex;align-items:center;gap:6px;margin-top:12px;padding:6px 12px;border-radius:999px;background:rgba(255,255,255,.2);font-weight:700;font-size:14px;font-variant-numeric:tabular-nums}
+.chip.soon{background:#fff;color:#c13584}
+.chip.late{background:rgba(0,0,0,.25)}
+@media (prefers-reduced-motion:no-preference){.chip.soon{animation:pulse 1.6s ease-in-out infinite}}
+@keyframes pulse{50%{transform:scale(1.05)}}
+.sign h1{font-size:clamp(40px,12vw,60px);font-weight:900;line-height:1;margin-top:6px;font-variant-numeric:tabular-nums}
+.sign p{margin:8px 0 0;font-weight:600}
+.sign-top{display:flex;justify-content:space-between;align-items:center;gap:12px}
+.sign-top > div{min-width:0}
+.sign-emoji{font-size:1.15em;line-height:1;vertical-align:-0.08em}
+
+/* Route strip */
+.route-card{background:var(--surface);border:1px solid var(--line);border-radius:22px;padding:16px 16px 2px;box-shadow:0 10px 28px -14px rgba(60,30,90,.28)}
+.route-head{margin-bottom:12px}
+.route-card .empty{margin-bottom:14px}
+.route{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
+.stop{display:grid;grid-template-columns:62px 20px 1fr;gap:0 10px;align-items:start}
+.stop .t{font:600 15px var(--mono);font-variant-numeric:tabular-nums;text-align:right;padding-top:2px}
+.stop .rail{position:relative;align-self:stretch;display:flex;justify-content:center}
+.stop .rail::before{content:"";position:absolute;top:0;bottom:0;width:4px;background:repeating-linear-gradient(var(--muted) 0 8px,transparent 8px 14px);opacity:.5}
+.stop:first-child .rail::before{top:10px}.stop:last-child .rail::before{bottom:calc(100% - 10px)}
+.dot{position:relative;width:16px;height:16px;border-radius:50%;margin-top:3px;background:var(--surface);border:4px solid var(--accent)}
+.stop.drive .dot{width:12px;height:12px;border-width:0;background:var(--amber);margin-top:5px}
+.stop .body{padding-bottom:18px;min-width:0}
+.stop .name{font-weight:800}
+.stop .sub{color:var(--muted);font-size:14px}
+.flag{display:inline-block;margin-top:6px;padding:3px 8px;border-radius:6px;font-size:13px;font-weight:600}
+.flag.warn{background:var(--warn-bg);color:var(--warn-fg)}
+.flag.bad{background:var(--bad-bg);color:var(--bad-fg)}
+.empty{padding:24px;text-align:center;color:var(--muted);border:2px dashed var(--line);border-radius:10px}
+
+/* Setup */
+details{background:var(--surface);border:1px solid var(--line);border-radius:16px}
+summary{padding:14px 16px;font-family:var(--display);font-weight:800;font-size:18px;cursor:pointer}
+.panel{padding:0 16px 16px;display:flex;flex-direction:column;gap:12px}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.row > *{min-width:0}
+label{font-size:13px;color:var(--muted);display:flex;flex-direction:column;gap:4px;flex:1}
+input,select{font:inherit;font-size:16px;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--fg);width:100%}
+input[type=number]{font-family:var(--mono)}
+.btn{font:700 15px var(--body);min-height:44px;padding:10px 16px;border-radius:12px;border:none;background:var(--accent);color:var(--accent-fg);cursor:pointer}
+.btn:disabled{opacity:.5;cursor:default}
+.btn.ghost{background:transparent;color:var(--muted);border:1px solid var(--line);min-height:36px;padding:6px 12px;font-size:13px}
+.item{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 0;border-top:1px solid var(--line)}
+.item:first-child{border-top:none}
+.item .meta{font-size:14px;color:var(--muted)}
+.item b{font-weight:700}
+.note{font-size:13px;color:var(--muted);margin:0}
+.badge{font-size:11px;letter-spacing:.08em;text-transform:uppercase;background:var(--warn-bg);color:var(--warn-fg);padding:2px 6px;border-radius:4px;font-weight:700}
+.import{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:16px;display:flex;flex-direction:column;gap:12px}
+.import h2{font-size:18px;font-weight:800}
+/* Top bar + menu */
+.topbar{display:flex;align-items:center;gap:10px}
+.topbar .seg{flex:1;min-width:0}
+.menu-btn{flex:none;width:48px;height:48px;border-radius:50%;border:1px solid var(--line);background:var(--surface);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;cursor:pointer}
+.menu-btn span{display:block;width:18px;height:2px;border-radius:2px;background:var(--fg)}
+.home{display:flex;flex-direction:column;gap:20px;zoom:var(--home-scale,1)}
+.scrim{position:fixed;inset:0;z-index:79;background:rgba(10,6,16,.5);opacity:0;pointer-events:none;transition:opacity .25s}
+.scrim.open{opacity:1;pointer-events:auto}
+.drawer{position:fixed;top:0;right:0;bottom:0;z-index:80;width:min(420px,100%);background:var(--bg);overflow-y:auto;overscroll-behavior:contain;transform:translateX(100%);transition:transform .3s cubic-bezier(.2,.8,.2,1),visibility .3s;visibility:hidden;box-shadow:-20px 0 40px -20px rgba(0,0,0,.4);padding-bottom:env(safe-area-inset-bottom,0px)}
+.drawer.open{transform:none;visibility:visible}
+.drawer-head{position:sticky;top:0;z-index:2;display:flex;align-items:center;justify-content:space-between;padding:calc(14px + env(safe-area-inset-top,0px)) max(16px,env(safe-area-inset-right,0px)) 12px 16px;background:var(--bg);border-bottom:1px solid var(--line)}
+.drawer-head h2{font-size:22px;font-weight:900}
+.close-btn{width:40px;height:40px;border-radius:50%;border:1px solid var(--line);background:var(--surface);color:var(--fg);font:700 16px var(--body);cursor:pointer}
+.drawer-body{display:flex;flex-direction:column;gap:12px;padding:12px max(16px,env(safe-area-inset-right,0px)) 32px 16px}
+.grp{font:800 12px var(--body);letter-spacing:.1em;text-transform:uppercase;color:var(--accent-text);margin:12px 0 0}
+.lbl{font-size:15px;font-weight:700;color:var(--fg)}
+.size-row{display:flex;flex-direction:column;gap:6px;padding-top:12px;border-top:1px solid var(--line)}
+.size-ctl{display:flex;align-items:center;gap:10px}
+.size-ctl input{flex:1;accent-color:var(--accent);padding:0;border:none;background:transparent}
+.a-sm{font-size:12px;font-weight:700}.a-lg{font-size:20px;font-weight:700}
+.switch-row{flex-direction:row;align-items:center;justify-content:space-between;gap:12px;color:var(--fg);font-size:15px}
+.switch{appearance:none;-webkit-appearance:none;flex:none;width:52px;height:30px;border-radius:999px;background:var(--line);position:relative;cursor:pointer;border:none;padding:0;transition:background .2s}
+.switch::after{content:"";position:absolute;top:3px;left:3px;width:24px;height:24px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.3);transition:transform .2s}
+.switch:checked{background:var(--grad)}
+.switch:checked::after{transform:translateX(22px)}
+@media (prefers-reduced-motion:reduce){.drawer,.scrim{transition:none}}
+.ask{position:fixed;inset:0;z-index:90;display:grid;place-items:center;background:rgba(10,6,16,.6);padding:16px max(16px,env(safe-area-inset-right,0px)) 16px max(16px,env(safe-area-inset-left,0px))}
+.ask-card{width:100%;max-width:380px;background:var(--surface);color:var(--fg);border-radius:22px;padding:24px 20px;display:flex;flex-direction:column;gap:12px;box-shadow:var(--glow)}
+.ask-card h2{font-size:24px;font-weight:900}
+.btn.grad{background:var(--grad)}
+.google-btn{display:inline-flex;align-items:center;justify-content:center;gap:10px;width:100%}
+.google-btn .g{width:22px;height:22px;border-radius:50%;background:#fff;color:#4285f4;font:800 14px/22px Arial,sans-serif;text-align:center}
+#authBox:empty{display:none}
+@media (prefers-reduced-motion:no-preference){.ask:not([hidden]) .ask-card{animation:rise .35s ease both}}
+.appear{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.mini-seg{display:flex;gap:2px;padding:3px;border:1px solid var(--line);border-radius:999px;background:var(--surface)}
+.mini-seg button{border:none;background:transparent;color:var(--muted);font:700 12px var(--body);padding:5px 10px;border-radius:999px;cursor:pointer;min-height:30px}
+.mini-seg button[aria-pressed="true"]{background:var(--grad);color:#fff}
+/* Opening splash: always dark, in the app's gradient */
+.splash{position:fixed;inset:0;z-index:100;display:grid;place-items:center;background:#14111a;padding:env(safe-area-inset-top,0px) env(safe-area-inset-right,0px) env(safe-area-inset-bottom,0px) env(safe-area-inset-left,0px);transition:opacity .45s ease,visibility .45s}
+.splash.out{opacity:0;visibility:hidden}
+.splash-inner{display:flex;flex-direction:column;align-items:center;gap:14px}
+.splash .logo{filter:drop-shadow(0 10px 28px rgba(193,53,132,.45));max-width:100%}
+.splash .needle{transform-origin:60px 60px}
+.splash-name{font-family:var(--display);font-weight:900;font-size:34px;letter-spacing:.01em;background:linear-gradient(135deg,#5b2bd6 0%,#8134af 30%,#c13584 65%,#e1306c 85%,#f77737 100%);-webkit-background-clip:text;background-clip:text;color:transparent}
+@media (prefers-reduced-motion:no-preference){
+  .splash .logo{animation:pop .7s cubic-bezier(.2,1.4,.4,1) both}
+  .splash .needle{animation:swing 1.1s cubic-bezier(.3,1.6,.5,1) .15s both}
+  .splash-name{animation:rise .5s ease .35s both}
+}
+@keyframes pop{0%{transform:scale(.4);opacity:0}100%{transform:scale(1);opacity:1}}
+@keyframes swing{0%{transform:rotate(-120deg)}60%{transform:rotate(18deg)}100%{transform:rotate(0)}}
+@keyframes rise{0%{transform:translateY(10px);opacity:0}100%{transform:none;opacity:1}}
+.cmpbtn{margin-top:8px;background:transparent;border:1px solid var(--line);color:var(--accent-text);font:700 13px var(--body);padding:6px 12px;border-radius:999px;cursor:pointer;min-height:32px}
+.cmp{margin-top:10px;border:1px solid var(--line);border-radius:12px;padding:10px 12px;background:var(--surface);display:flex;flex-direction:column;gap:8px}
+.mode{display:grid;grid-template-columns:24px 1fr auto;gap:8px;align-items:center;font-size:15px}
+.mode .mn{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mode .mt{font:600 14px var(--mono);text-align:right}
+.mode .ml{grid-column:2 / 4;font-size:13px;color:var(--muted);margin-top:-6px}
+.mode.best .mn{font-weight:800}
+.best-tag{font-size:10px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;background:var(--grad);color:#fff;padding:2px 6px;border-radius:999px;margin-left:6px;vertical-align:1px}
+.cmp .note{font-size:12px}
+.sub-h{font:800 15px var(--display);margin:6px 0 0}
+.addr{display:flex;flex-direction:column;gap:6px;padding:10px 0;border-top:1px solid var(--line)}
+.addr:first-child{border-top:none}
+.addr .row{flex-wrap:nowrap}
+.addr .row .btn{flex:none}
+.addr .found{font-size:13px;color:var(--muted)}
+.addr .found.ok{color:var(--accent-text)}
+.addform{display:flex;flex-direction:column;gap:10px}
+.live-off{background:var(--warn-bg);color:var(--warn-fg);padding:10px 12px;border-radius:12px;font-size:14px}
+.pname-row{display:flex;align-items:center;gap:8px}
+.pname{font:800 16px var(--display);border:1px solid transparent;background:transparent;padding:6px 8px;margin-left:-8px;border-radius:8px;flex:1;min-width:0}
+.pname:hover,.pname:focus{border-color:var(--line);background:var(--bg)}
+.home-tag{font-size:10px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;background:var(--grad);color:#fff;padding:2px 7px;border-radius:999px;flex:none}
+.rm{flex:none;background:transparent;border:none;color:var(--bad-fg);font:700 13px var(--body);padding:6px 4px;cursor:pointer;min-height:32px}
+.rm.armed{background:var(--bad-bg);border-radius:8px;padding:6px 10px}
+.traffic{display:block;margin-top:6px;font-size:14px;font-weight:600;opacity:.95}
+.livetag{font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--accent-text);margin-left:4px}
+.seg{display:flex;padding:4px;gap:4px;background:var(--surface);border:1px solid var(--line);border-radius:14px}
+.seg button{flex:1;min-height:40px;border:none;border-radius:10px;background:transparent;color:var(--muted);font:700 15px var(--body);cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--grad);color:#fff;box-shadow:var(--glow)}
+.dayview,.calview{display:flex;flex-direction:column;gap:20px}
+.calview{gap:14px}
+.navrow{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px}
+.navrow h2{font-size:20px;font-weight:800;text-align:center;flex:1}
+.arrows{display:flex;gap:6px}
+.arrow{width:40px;height:40px;border-radius:12px;border:1px solid var(--line);background:var(--surface);color:var(--fg);font:700 22px/1 var(--body);cursor:pointer;flex:none}
+.days button .num{font:600 12px var(--mono);opacity:.75}
+/* Week list */
+.wk{display:flex;flex-direction:column;gap:8px}
+.wkday{display:grid;grid-template-columns:52px 1fr;gap:12px;align-items:start;text-align:left;width:100%;padding:12px;border-radius:14px;border:1px solid var(--line);background:var(--surface);color:var(--fg);font:inherit;cursor:pointer}
+.wkday.today{border-color:var(--accent)}
+.wkday .dname{font:700 13px var(--body);text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+.wkday.today .dname{color:var(--accent-text)}
+.wkday .dnum{font:800 24px/1 var(--display)}
+.wkday .evs{display:flex;flex-direction:column;gap:6px;min-width:0}
+.ev{display:flex;gap:8px;align-items:baseline;font-size:15px;min-width:0}
+.ev .tm{font:600 13px var(--mono);color:var(--muted);flex:none;width:64px}
+.ev .lb{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600}
+.leavechip{align-self:flex-start;font-size:12px;font-weight:700;padding:3px 8px;border-radius:999px;background:var(--grad);color:#fff}
+.free{color:var(--muted);font-size:14px;padding-top:4px}
+/* Month grid */
+.mgrid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px}
+.mgrid .dow{font:700 11px var(--body);text-align:center;color:var(--muted);letter-spacing:.06em;text-transform:uppercase;padding-bottom:4px}
+.mcell{min-height:64px;border-radius:10px;border:1px solid var(--line);background:var(--surface);color:var(--fg);padding:4px;display:flex;flex-direction:column;align-items:center;gap:2px;cursor:pointer;font:inherit}
+.mcell.out{opacity:.4}
+.mcell.today{border-color:var(--accent);border-width:2px}
+.mcell .n{font:700 13px var(--mono)}
+.mcell.today .n{color:var(--accent-text)}
+.mcell .em{font-size:14px;line-height:1.1;text-align:center;word-break:break-all}
+.mcell .more{font-size:10px;font-weight:700;color:var(--muted)}
+.acct-row{display:flex;align-items:center;gap:12px}
+.acct-row img{width:44px;height:44px;border-radius:50%;flex:none}
+.greet{font-family:var(--display);font-weight:800;font-size:clamp(28px,8vw,36px);line-height:1.1;margin-bottom:-8px;color:var(--fg);text-wrap:balance}
+.greet #who{background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent}
+.greet.mini{font-size:13px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:-14px;padding-left:4px}
+@media (prefers-reduced-motion:no-preference){.greet{transition:font-size .35s ease,margin .35s ease,letter-spacing .35s ease,color .35s ease}}
+.drop{flex-direction:row;align-items:center;justify-content:center;border:2px dashed var(--line);border-radius:10px;padding:18px;cursor:pointer;color:var(--fg);font-weight:600;font-size:15px;text-align:center}
+.drop input{position:absolute;opacity:0;width:1px;height:1px}
+.drop:focus-within{outline:3px solid var(--accent);outline-offset:2px}
+.pick{display:flex;gap:10px;align-items:flex-start;padding:10px 0;border-top:1px solid var(--line);flex-direction:row;color:var(--fg);font-size:15px}
+.pick input{width:20px;height:20px;margin-top:2px;flex:none}
+@media (prefers-reduced-motion:no-preference){.sign{transition:background .2s}}
+</style>
+
+</head>
+<body>
+<div class="splash" id="splash" aria-hidden="true">
+  <div class="splash-inner">
+    <svg class="logo" viewBox="0 0 120 120" width="112" height="112">
+      <defs>
+        <linearGradient id="lbGrad" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stop-color="#5b2bd6"/><stop offset=".3" stop-color="#8134af"/><stop offset=".65" stop-color="#c13584"/><stop offset=".85" stop-color="#e1306c"/><stop offset="1" stop-color="#f77737"/>
+        </linearGradient>
+      </defs>
+      <circle cx="60" cy="60" r="52" fill="none" stroke="url(#lbGrad)" stroke-width="7"/>
+      <g stroke="url(#lbGrad)" stroke-width="4" stroke-linecap="round">
+        <line x1="60" y1="16" x2="60" y2="24"/><line x1="60" y1="96" x2="60" y2="104"/>
+        <line x1="16" y1="60" x2="24" y2="60"/><line x1="96" y1="60" x2="104" y2="60"/>
+      </g>
+      <g class="needle">
+        <path d="M60 26 L71 60 L60 60 L49 60 Z" fill="url(#lbGrad)"/>
+        <path d="M60 94 L71 60 L49 60 Z" fill="#ece8f2" opacity=".85"/>
+        <circle cx="60" cy="60" r="5" fill="#14111a" stroke="#ece8f2" stroke-width="2"/>
+      </g>
+    </svg>
+    <div class="splash-name">Leave By</div>
+  </div>
+</div>
+
+<div class="ask" id="askName" role="dialog" aria-modal="true" aria-labelledby="askTitle" hidden>
+  <form class="ask-card" id="askForm">
+    <h2 id="askTitle">Welcome to Leave By 👋</h2>
+    <p class="note" style="font-size:15px">What should we call you? Your name shows up in your daily greeting.</p>
+    <input id="askInput" placeholder="Your first name" autocomplete="given-name" maxlength="30">
+    <button class="btn grad" type="submit">Continue</button>
+    <button class="btn ghost" type="button" id="askSkip" style="align-self:center">Skip for now</button>
+  </form>
+</div>
+
+<div class="wrap">
+  <div class="topbar">
+<div class="seg" role="group" aria-label="Choose a view">
+      <button type="button" id="v-day" data-v="day" aria-pressed="true">Day</button>
+      <button type="button" id="v-week" data-v="week" aria-pressed="false">Week</button>
+      <button type="button" id="v-month" data-v="month" aria-pressed="false">Month</button>
+    </div>
+    <button type="button" class="menu-btn" id="menuBtn" aria-label="Open menu" aria-expanded="false" aria-controls="drawer"><span></span><span></span><span></span></button>
+  </div>
+
+  <div class="home" id="home">
+  <div class="dayview" id="dayView">
+  <div>
+    <div class="navrow">
+      <div class="eyebrow" id="dateLine">Today</div>
+      <div class="arrows"><button type="button" class="arrow" id="wkPrev" aria-label="Previous week">‹</button><button type="button" class="arrow" id="wkNext" aria-label="Next week">›</button></div>
+    </div>
+    <div class="days" id="days" role="group" aria-label="Pick a day"></div>
+  </div>
+
+  <div class="greet" id="greet"><span id="hello">Good morning</span><span id="who"></span></div>
+  <section class="sign" id="sign" aria-live="polite"></section>
+
+  <section class="route-card" aria-label="Today's route">
+    <div class="eyebrow route-head">Your day</div>
+    <ol class="route" id="route"></ol>
+  </section>
+  </div>
+
+  <section class="calview" id="calView" hidden>
+    <div class="navrow">
+      <button type="button" class="arrow" id="calPrev" aria-label="Previous">‹</button>
+      <h2 id="calTitle">This week</h2>
+      <button type="button" class="arrow" id="calNext" aria-label="Next">›</button>
+    </div>
+    <div id="calBody"></div>
+    <button type="button" class="btn ghost" id="calToday" style="align-self:center">Jump to today</button>
+  </section>
+  </div>
+</div>
+
+<div class="scrim" id="scrim"></div>
+<aside class="drawer" id="drawer" aria-label="Menu" aria-hidden="true" inert>
+  <div class="drawer-head">
+    <h2>Menu</h2>
+    <button type="button" class="close-btn" id="menuClose" aria-label="Close menu">✕</button>
+  </div>
+  <div class="drawer-body">
+  <h3 class="grp">Your schedule</h3>
+  <section class="import" id="importBox" hidden>
+    <div>
+      <h2>Import from a screenshot</h2>
+      <p class="note">Snap your MyUW schedule or a shift calendar. Claude reads it and you choose what to add.</p>
+    </div>
+    <label class="drop" for="shot">
+      <input id="shot" type="file" accept="image/*">
+      <span id="shotName">Choose a screenshot</span>
+    </label>
+    <div class="row">
+      <label>Put these at<select id="iPlace"></select></label>
+      <button class="btn" id="readShot" type="button" disabled style="align-self:flex-end">Read schedule</button>
+    </div>
+    <p class="note" id="iStatus" aria-live="polite"></p>
+    <div id="iResults"></div>
+  </section>
+
+  <details id="shiftBox" hidden>
+    <summary>Work shifts from Google Calendar</summary>
+    <div class="panel">
+      <p class="note">Pulls your next six weeks of shifts from each WhenToWork calendar. Pick where each job's shifts happen.</p>
+      <div id="calRows"><p class="note">Tap Sync shifts to find your calendars.</p></div>
+      <button class="btn" id="syncBtn" type="button">Sync shifts</button>
+      <p class="note" id="sStatus" aria-live="polite"></p>
+    </div>
+  </details>
+
+  <details id="schedPanel">
+    <summary>Weekly schedule</summary>
+    <div class="panel">
+      <div id="schedList"></div>
+      <form id="addForm" class="panel" style="padding:0">
+        <div class="row">
+          <label>What<input id="fLabel" required placeholder="Event"></label>
+        </div>
+        <div class="row">
+          <label>Where<select id="fPlace"></select></label>
+          <label>Days<select id="fDays">
+            <option value="1,3,5">Mon / Wed / Fri</option>
+            <option value="2,4">Tue / Thu</option>
+            <option value="1,2,3,4,5">Weekdays</option>
+            <option value="6,0">Weekends</option>
+            <option value="1">Mon</option><option value="2">Tue</option><option value="3">Wed</option>
+            <option value="4">Thu</option><option value="5">Fri</option><option value="6">Sat</option><option value="0">Sun</option>
+          </select></label>
+        </div>
+        <div class="row">
+          <label>Starts<input id="fStart" type="time" required value="09:30"></label>
+          <label>Ends<input id="fEnd" type="time" required value="10:20"></label>
+        </div>
+        <button class="btn" type="submit">Add to schedule</button>
+      </form>
+    </div>
+  </details>
+
+  <details id="placesPanel">
+    <summary>Places &amp; drive times</summary>
+    <div class="panel">
+      <h3 class="sub-h">Add a place</h3>
+      <div class="addform">
+        <label>Name<input id="newPlace" placeholder="Work, Gym, Mom's house" maxlength="40"></label>
+        <label>Address<input id="newAddr" placeholder="Street address (optional)" autocomplete="street-address"></label>
+        <button class="btn" id="addPlace" type="button">Add place</button>
+        <p class="note" id="addNote" aria-live="polite"></p>
+      </div>
+      <p class="note live-off" id="liveNote" hidden>🚗 Live traffic isn't available right now. Set your usual drive times under <b>Typical drive times</b> below and Leave By will use those.</p>
+      <h3 class="sub-h">Your places</h3>
+      <p class="note">Tap a name to rename it. Places with an address get live traffic from TomTom.</p>
+      <div id="addrList"></div>
+      <h3 class="sub-h">Typical drive times</h3>
+      <p class="note">Used when live traffic isn't available, like for places without an address.</p>
+      <div id="timesList"></div>
+      <div class="row">
+        <label>Buffer for parking and walking (min)<input id="buffer" type="number" min="0" max="60"></label>
+      </div>
+    </div>
+  </details>
+
+  <h3 class="grp">Profile</h3>
+  <section class="import" id="acct">
+    <h2>Account</h2>
+    <div class="acct-row">
+      <img id="avatar" alt="" hidden>
+      <div style="min-width:0"><b id="acctName">Not signed in</b><p class="note" id="acctNote">Your schedule is saved on this device.</p></div>
+    </div>
+    <div id="authBox"></div>
+    <label>Name in your greeting<input id="nick" placeholder="Your first name" autocomplete="given-name" maxlength="30"></label>
+  </section>
+
+  <h3 class="grp">Display</h3>
+  <section class="import">
+    <div class="appear">
+      <span class="lbl">Theme</span>
+      <div class="mini-seg" id="themeSeg" role="group" aria-label="Choose light or dark mode">
+      <button type="button" data-theme-pick="light" aria-pressed="true">☀️ Light</button>
+      <button type="button" data-theme-pick="dark" aria-pressed="false">🌙 Dark</button>
+    </div>
+    </div>
+    <div class="size-row">
+      <label for="sizeRange" class="lbl">Home screen size</label>
+      <div class="size-ctl"><span class="a-sm" aria-hidden="true">A</span><input type="range" id="sizeRange" min="85" max="130" step="5" value="100" aria-describedby="sizeVal"><span class="a-lg" aria-hidden="true">A</span></div>
+      <p class="note" id="sizeVal">100%</p>
+    </div>
+  </section>
+
+  <h3 class="grp">Haptics</h3>
+  <section class="import">
+    <label class="switch-row" for="hapticToggle"><span><b>Vibrate on tap</b><span class="note" style="display:block" id="hapticNote">A light buzz when you tap buttons.</span></span><input type="checkbox" id="hapticToggle" class="switch" role="switch"></label>
+  </section>
+
+  <div class="row" style="justify-content:space-between">
+    <p class="note" id="sampleNote"></p>
+    <button class="btn ghost" id="reset" type="button">Clear my schedule</button>
+  </div>
+  </div>
+</aside>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script src="/platform.js"></script>
+<script>
+(function(){
+  const DAY_NAMES=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+  const LONG=["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+  const KEY="leaveby.v1";
+
+  function example(){
+    // A new person starts with a blank schedule and just a Home place.
+    return {sample:false,home:"Home",places:["Home"],times:{},buffer:10,events:[],shifts:[]};
+  }
+
+  let state;
+  try{ state=JSON.parse(localStorage.getItem(KEY)); }catch(e){ state=null; }
+  if(!state||!state.places) state=example();
+  let cloud=null, cloudTimer=null;
+  function save(){ try{ localStorage.setItem(KEY,JSON.stringify(state)); }catch(e){} cloudSave(); }
+  function cloudSave(){
+    if(!cloud) return;
+    clearTimeout(cloudTimer);
+    cloudTimer=setTimeout(async()=>{
+      try{ await cloud.set({state:JSON.stringify(state),savedAt:Date.now()}); setAcctNote("Synced to your account just now."); }
+      catch(e){ setAcctNote("Couldn't sync just now. Your changes are saved on this device and will sync next time."); }
+    },800);
+  }
+  function setAcctNote(t){ const n=document.getElementById("acctNote"); if(n) n.textContent=t; }
+  function edited(){ state.sample=false; save(); render(); }
+
+  // ---- Light / dark mode ----
+  const rootEl=document.documentElement;
+  const pickedTheme=()=>state.theme==="dark"?"dark":"light";
+  function applyTheme(){
+    const t=pickedTheme();
+    rootEl.setAttribute("data-theme",t);
+    document.querySelectorAll("[data-theme-pick]").forEach(b=>b.setAttribute("aria-pressed",String(b.dataset.themePick===t)));
+  }
+  // If the host app changes the theme, keep the one you picked.
+  new MutationObserver(()=>{ const t=pickedTheme(); if(rootEl.getAttribute("data-theme")!==t) rootEl.setAttribute("data-theme",t); }).observe(rootEl,{attributes:true,attributeFilter:["data-theme"]});
+  document.getElementById("themeSeg").addEventListener("click",e=>{ const b=e.target.closest("[data-theme-pick]"); if(!b) return; state.theme=b.dataset.themePick; applyTheme(); save(); });
+  applyTheme();
+
+  const toMin=s=>{const [h,m]=s.split(":").map(Number);return h*60+m;};
+  const fmt=m=>{m=((m%1440)+1440)%1440;let h=Math.floor(m/60),mm=m%60,ap=h>=12?"PM":"AM";h=h%12||12;return h+":"+String(mm).padStart(2,"0")+" "+ap;};
+  const pairKey=(a,b)=>[a,b].sort().join("|");
+  const travel=(a,b)=>a===b?0:(state.times[pairKey(a,b)]??30);
+  const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+  const midnight=dt=>{const x=new Date(dt);x.setHours(0,0,0,0);return x;};
+  const addDays=(dt,n)=>{const x=new Date(dt);x.setDate(x.getDate()+n);return x;};
+  const weekStart=dt=>addDays(midnight(dt),-((dt.getDay()+6)%7)); // Monday
+  let selDate=midnight(new Date()), view="day", calCursor=midnight(new Date());
+
+  const ymd=dt=>dt.getFullYear()+"-"+String(dt.getMonth()+1).padStart(2,"0")+"-"+String(dt.getDate()).padStart(2,"0");
+  // Emoji for where you're headed: checked top to bottom, first match wins.
+  const EMOJI=[
+    [/chem/i,"🧪"],[/bio(?!s)|genetic/i,"🧬"],[/phys/i,"⚛️"],[/calc|math|amath|algebra/i,"📐"],
+    [/stat/i,"📊"],[/econ/i,"📈"],[/\bcse\b|comput|program|coding/i,"💻"],[/\bise\b|\bie\b|engr|engineer|\bme\b|\bee\b/i,"⚙️"],
+    [/engl|writ|essay|comm/i,"✍️"],[/hist|poli|psych|soc/i,"📜"],
+    [/exam|midterm|final|quiz/i,"📝"],[/\blab\b/i,"🔬"],
+    [/lifeguard|guard|swim|pool|aquatic|\bbac\b|inservice|wave/i,"🛟"],[/ref|soccer|match/i,"⚽"],
+    [/gym|workout|lift|climb/i,"🏋️"],[/shift|work|job/i,"💼"],
+    [/lecture|class|section|seminar|uw|campus/i,"📚"]
+  ];
+  function emojiFor(ev){ const s=(ev.label||"")+" "+(ev.place||""); for(const [re,e] of EMOJI) if(re.test(s)) return e; return "📍"; }
+  function eventsOn(dt){
+    const key=ymd(dt), d=dt.getDay();
+    const shifts=(state.shifts||[]).filter(s=>s.date===key);
+    return state.events.filter(e=>e.days.includes(d)).concat(shifts).sort((a,b)=>toMin(a.start)-toMin(b.start));
+  }
+  // Live drive times from TomTom, kept in memory: from>to>date>arrive-minute -> {mins, delay}
+  const LIVE={};
+  const liveKey=(a,b,dk,arr)=>a+">"+b+">"+dk+">"+arr;
+  const coordOf=pl=>{ const l=state.loc&&state.loc[pl]; return l&&Array.isArray(l.coord)?l.coord:null; };
+  function plan(dt){
+    const evs=eventsOn(dt), dk=ymd(dt);
+    const steps=[], legs=[]; let here=state.home, freeAt=null; let firstLeave=null; let conflicts=0;
+    evs.forEach(e=>{
+      let t=travel(here,e.place), live=null;
+      if(t>0){
+        const arr=toMin(e.start)-state.buffer;
+        legs.push({from:here,to:e.place,arr,dk});
+        live=LIVE[liveKey(here,e.place,dk,arr)]||null;
+        if(live) t=live.mins;
+      }
+      if(t>0){
+        const leave=toMin(e.start)-t-state.buffer;
+        let flag=null;
+        if(freeAt!==null && leave<freeAt){ flag={k:"bad",msg:"Short by "+(freeAt-leave)+" min. You can't make this one on time."}; conflicts++; }
+        else if(freeAt!==null && leave-freeAt<10){ flag={k:"warn",msg:"Only "+(leave-freeAt)+" min of slack"}; }
+        steps.push({type:"drive",leg:legs[legs.length-1],driveMins:t,time:leave,name:"Leave "+here,sub:t+" min drive to "+e.place+(live?(live.delay>=2?" (live, +"+live.delay+" min traffic)":" (live, roads clear)"):"")+" + "+state.buffer+" min buffer",flag});
+        if(firstLeave===null) firstLeave={time:leave,to:e,live};
+      }
+      steps.push({type:"stop",time:toMin(e.start),name:e.label,sub:e.place+" · until "+fmt(toMin(e.end))});
+      here=e.place; freeAt=toMin(e.end);
+    });
+    if(evs.length && here!==state.home){
+      const t=travel(here,state.home);
+      steps.push({type:"drive",time:freeAt,name:"Head home",sub:t+" min drive"});
+      steps.push({type:"stop",time:freeAt+t,name:"Home",sub:"Back by "+fmt(freeAt+t)});
+    }
+    return {steps,firstLeave,conflicts,count:evs.length,legs};
+  }
+
+  function render(){
+    const now=new Date(); const todayKey=ymd(now); const isToday=ymd(selDate)===todayKey;
+    document.getElementById("dayView").hidden=view!=="day";
+    document.getElementById("calView").hidden=view==="day";
+    ["day","week","month"].forEach(v=>document.getElementById("v-"+v).setAttribute("aria-pressed",String(v===view)));
+    if(view!=="day") renderCal(now);
+    const dLabel=LONG[selDate.getDay()]+", "+selDate.toLocaleDateString(undefined,{month:"short",day:"numeric"});
+    document.getElementById("dateLine").textContent=isToday?"Today · "+dLabel:dLabel;
+    const dEl=document.getElementById("days");
+    const ws=weekStart(selDate);
+    dEl.innerHTML=[0,1,2,3,4,5,6].map(o=>{ const dt=addDays(ws,o), k=ymd(dt), has=eventsOn(dt).length>0, t=k===todayKey; return `<button type="button" data-k="${k}" class="${has?"has":""} ${t?"today":""}" aria-pressed="${k===ymd(selDate)}" aria-label="${LONG[dt.getDay()]} ${dt.getDate()}${t?", today":""}${has?", has plans":""}">${DAY_NAMES[dt.getDay()]}<span class="num">${dt.getDate()}</span><span class="pip"></span></button>`; }).join("");
+
+    const p=plan(selDate);
+    const sign=document.getElementById("sign");
+    if(!p.firstLeave){
+      sign.innerHTML=`<div class="eyebrow">${p.count?"No driving needed":"Nothing scheduled"}</div><h1>Stay put</h1><p>${p.count?"Everything today is at "+esc(state.home)+".":"Add classes or shifts from the ☰ menu to plan this day."}</p>`;
+    }else{
+      const fl=p.firstLeave;
+      let extra="", chip="";
+      if(isToday){ const mins=fl.time-(now.getHours()*60+now.getMinutes());
+        if(mins>0) chip=`<span class="chip ${mins<=15?"soon":""}">${mins<=15?"Head out soon · ":"⏱ "}${mins>=60?Math.floor(mins/60)+" h "+(mins%60)+" min":mins+" min"}</span>`;
+        else chip=`<span class="chip late">Leave time has passed</span>`; }
+      sign.innerHTML=`<div class="eyebrow">Leave ${esc(state.home)} by${extra}</div><h1>${fmt(fl.time)}</h1><p class="for">for ${esc(fl.to.label)} at ${fmt(toMin(fl.to.start))}${p.conflicts?" · ⚠️ "+p.conflicts+" conflict"+(p.conflicts>1?"s":""):""} <span class="sign-emoji" aria-hidden="true">${emojiFor(fl.to)}</span>${fl.live?`<span class="traffic">🚗 ${fl.live.delay>=2?"Traffic adds "+fl.live.delay+" min":"Live traffic · roads look clear"}</span>`:""}</p>${chip}`;
+    }
+
+    const r=document.getElementById("route");
+    r.innerHTML=p.steps.length?p.steps.map(s=>`<li class="stop ${s.type}"><div class="t">${fmt(s.time).replace(" ","&nbsp;")}</div><div class="rail"><span class="dot"></span></div><div class="body"><div class="name">${esc(s.name)}</div><div class="sub">${esc(s.sub)}</div>${s.flag?`<span class="flag ${s.flag.k}">${esc(s.flag.msg)}</span>`:""}${s.leg&&transit?compareHtml(s):""}</div></li>`).join(""):`<li class="empty">No stops on ${LONG[selDate.getDay()]}.</li>`;
+
+    // schedule list
+    const sl=document.getElementById("schedList");
+    const sorted=[...state.events].sort((a,b)=>Math.min(...a.days.map(x=>(x+6)%7))-Math.min(...b.days.map(x=>(x+6)%7))||toMin(a.start)-toMin(b.start));
+    sl.innerHTML=sorted.length?sorted.map(e=>`<div class="item"><div><b>${esc(e.label)}</b><div class="meta">${e.days.map(d=>DAY_NAMES[d]).join("/")} · ${fmt(toMin(e.start))}–${fmt(toMin(e.end))} · ${esc(e.place)}</div></div><button class="btn ghost" type="button" data-del="${e.id}">Remove</button></div>`).join(""):`<p class="note">No classes or shifts yet.</p>`;
+
+    const placeOpts=state.places.filter(p=>p!==state.home).map(p=>`<option>${esc(p)}</option>`).join("")+`<option>${esc(state.home)}</option>`;
+    document.getElementById("fPlace").innerHTML=placeOpts;
+    const ip=document.getElementById("iPlace"), keep=ip.value; ip.innerHTML=placeOpts; if(keep&&state.places.includes(keep)) ip.value=keep;
+    renderCalRows();
+
+    // times
+    const al=document.getElementById("addrList");
+    if(!al.contains(document.activeElement)){
+      al.innerHTML=state.places.map((pl,i)=>{ const l=(state.loc||{})[pl]||{};
+        const isHome=pl===state.home;
+        return `<div class="addr"><div class="pname-row"><input class="pname" id="pname-${i}" data-old="${esc(pl)}" value="${esc(pl)}" maxlength="40" aria-label="Name for ${esc(pl)}">${isHome?'<span class="home-tag">Home</span>':`<button type="button" class="rm" data-rm="${esc(pl)}">Remove</button>`}</div><div class="row"><input id="addr-${i}" data-pl="${esc(pl)}" placeholder="Street address or place name" value="${esc(l.addr||"")}" autocomplete="street-address"><button class="btn" type="button" data-find="${i}">Find</button></div><div class="found ${l.coord?"ok":""}" id="found-${i}" aria-live="polite">${l.coord?"✓ "+esc(l.label||l.addr):"No address yet, using typical times"}</div></div>`; }).join("");
+    }
+    const tl=document.getElementById("timesList"); let html="";
+    for(let i=0;i<state.places.length;i++)for(let j=i+1;j<state.places.length;j++){
+      const a=state.places[i],b=state.places[j],k=pairKey(a,b);
+      html+=`<div class="item"><div><b>${esc(a)} ↔ ${esc(b)}</b></div><div style="width:96px"><input type="number" min="0" max="300" aria-label="Minutes between ${esc(a)} and ${esc(b)}" id="t-${i}-${j}" data-k="${esc(k)}" value="${travel(a,b)}"></div></div>`;
+    }
+    tl.innerHTML=html;
+    document.getElementById("buffer").value=state.buffer;
+    document.getElementById("sampleNote").innerHTML=state.sample?`<span class="badge">Example</span> Sample schedule. Edit it to make it yours.`:"Saved on this device.";
+  }
+
+  const fromKey=k=>{const [y,m,d]=k.split("-").map(Number);return new Date(y,m-1,d);};
+  document.getElementById("days").addEventListener("click",e=>{const b=e.target.closest("button");if(b){selDate=fromKey(b.dataset.k);render();refreshTraffic(selDate);}});
+  document.getElementById("wkPrev").addEventListener("click",()=>{selDate=addDays(selDate,-7);render();});
+  document.getElementById("wkNext").addEventListener("click",()=>{selDate=addDays(selDate,7);render();});
+  document.querySelector(".seg").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;view=b.dataset.v;calCursor=new Date(selDate);render();});
+  document.getElementById("calPrev").addEventListener("click",()=>{calCursor=view==="week"?addDays(calCursor,-7):new Date(calCursor.getFullYear(),calCursor.getMonth()-1,1);render();});
+  document.getElementById("calNext").addEventListener("click",()=>{calCursor=view==="week"?addDays(calCursor,7):new Date(calCursor.getFullYear(),calCursor.getMonth()+1,1);render();});
+  document.getElementById("calToday").addEventListener("click",()=>{calCursor=midnight(new Date());render();});
+  document.getElementById("calBody").addEventListener("click",e=>{const b=e.target.closest("[data-k]");if(!b)return;selDate=fromKey(b.dataset.k);view="day";render();refreshTraffic(selDate);window.scrollTo({top:0});});
+
+  function renderCal(now){
+    const todayKey=ymd(now), body=document.getElementById("calBody"), title=document.getElementById("calTitle");
+    const short=dt=>dt.toLocaleDateString(undefined,{month:"short",day:"numeric"});
+    if(view==="week"){
+      const ws=weekStart(calCursor), we=addDays(ws,6);
+      title.textContent=short(ws)+" – "+short(we);
+      body.innerHTML=`<div class="wk">`+[0,1,2,3,4,5,6].map(o=>{
+        const dt=addDays(ws,o), k=ymd(dt), evs=eventsOn(dt), p=plan(dt);
+        const list=evs.length?evs.map(e=>`<div class="ev"><span class="tm">${fmt(toMin(e.start))}</span><span class="lb">${esc(e.label)} ${emojiFor(e)}</span></div>`).join(""):`<div class="free">Free day</div>`;
+        const leave=p.firstLeave?`<span class="leavechip">Leave by ${fmt(p.firstLeave.time)}</span>`:"";
+        return `<button type="button" class="wkday ${k===todayKey?"today":""}" data-k="${k}" aria-label="Open ${LONG[dt.getDay()]} ${short(dt)}"><div><div class="dname">${DAY_NAMES[dt.getDay()]}</div><div class="dnum">${dt.getDate()}</div></div><div class="evs">${leave}${list}</div></button>`;
+      }).join("")+`</div>`;
+    }else{
+      const first=new Date(calCursor.getFullYear(),calCursor.getMonth(),1);
+      title.textContent=first.toLocaleDateString(undefined,{month:"long",year:"numeric"});
+      const gs=weekStart(first); let cells="";
+      ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"].forEach(d=>cells+=`<div class="dow">${d}</div>`);
+      for(let o=0;o<42;o++){
+        const dt=addDays(gs,o); if(o>=35&&dt.getMonth()!==first.getMonth()) break;
+        const k=ymd(dt), evs=eventsOn(dt), em=evs.slice(0,3).map(emojiFor).join("");
+        cells+=`<button type="button" class="mcell ${dt.getMonth()!==first.getMonth()?"out":""} ${k===todayKey?"today":""}" data-k="${k}" aria-label="${LONG[dt.getDay()]} ${short(dt)}, ${evs.length} event${evs.length===1?"":"s"}"><span class="n">${dt.getDate()}</span><span class="em" aria-hidden="true">${em}</span>${evs.length>3?`<span class="more">+${evs.length-3}</span>`:""}</button>`;
+      }
+      body.innerHTML=`<div class="mgrid">${cells}</div>`;
+    }
+  }
+  document.getElementById("schedList").addEventListener("click",e=>{const b=e.target.closest("[data-del]");if(b){state.events=state.events.filter(x=>x.id!==+b.dataset.del);edited();}});
+  document.getElementById("timesList").addEventListener("change",e=>{const i=e.target;if(i.dataset.k){state.times[i.dataset.k]=Math.max(0,+i.value||0);edited();}});
+  document.getElementById("buffer").addEventListener("change",e=>{state.buffer=Math.max(0,+e.target.value||0);edited();});
+  document.getElementById("addForm").addEventListener("submit",e=>{
+    e.preventDefault();
+    const label=document.getElementById("fLabel").value.trim(); const start=document.getElementById("fStart").value, end=document.getElementById("fEnd").value;
+    if(!label||!start||!end) return;
+    if(toMin(end)<=toMin(start)){ document.getElementById("fEnd").setCustomValidity("End time must be after the start time");document.getElementById("fEnd").reportValidity();return; }
+    document.getElementById("fEnd").setCustomValidity("");
+    state.events.push({id:Date.now(),label,place:document.getElementById("fPlace").value,days:document.getElementById("fDays").value.split(",").map(Number),start,end});
+    document.getElementById("fLabel").value=""; edited();
+  });
+  document.getElementById("fEnd").addEventListener("input",e=>e.target.setCustomValidity(""));
+  function forgetLiveData(){ try{ Object.keys(LIVE).forEach(k=>delete LIVE[k]); Object.keys(CMP).forEach(k=>delete CMP[k]); Object.keys(OPEN).forEach(k=>delete OPEN[k]); }catch(e){} }
+  function renamePlace(oldN,newN){
+    newN=newN.trim().slice(0,40);
+    if(!newN||newN===oldN) return "same";
+    if(state.places.some(p=>p.toLowerCase()===newN.toLowerCase()&&p!==oldN)) return "taken";
+    const sw=x=>x===oldN?newN:x;
+    state.places=state.places.map(sw);
+    if(state.home===oldN) state.home=newN;
+    const t={}; Object.entries(state.times||{}).forEach(([k,v])=>{ const [a,b]=k.split("|").map(sw); t[pairKey(a,b)]=v; }); state.times=t;
+    if(state.loc&&state.loc[oldN]){ state.loc[newN]=state.loc[oldN]; delete state.loc[oldN]; }
+    state.events.forEach(e=>{ e.place=sw(e.place); });
+    (state.shifts||[]).forEach(e=>{ e.place=sw(e.place); });
+    if(state.sync&&state.sync.cals) state.sync.cals.forEach(c=>{ c.place=sw(c.place); });
+    forgetLiveData(); document.activeElement&&document.activeElement.blur&&document.activeElement.blur(); edited(); return "ok";
+  }
+  function placeUses(pl){
+    return state.events.filter(e=>e.place===pl).length+(state.shifts||[]).filter(e=>e.place===pl).length+((state.sync&&state.sync.cals)||[]).filter(c=>c.place===pl).length;
+  }
+  function removePlace(pl){
+    if(pl===state.home) return;
+    // Anything that happened at this place moves to Home rather than disappearing.
+    state.places=state.places.filter(p=>p!==pl);
+    Object.keys(state.times||{}).forEach(k=>{ if(k.split("|").includes(pl)) delete state.times[k]; });
+    if(state.loc) delete state.loc[pl];
+    state.events.forEach(e=>{ if(e.place===pl) e.place=state.home; });
+    (state.shifts||[]).forEach(e=>{ if(e.place===pl) e.place=state.home; });
+    if(state.sync&&state.sync.cals) state.sync.cals.forEach(c=>{ if(c.place===pl) c.place=state.home; });
+    forgetLiveData(); edited();
+  }
+  const addrListEl=document.getElementById("addrList");
+  addrListEl.addEventListener("change",e=>{
+    const inp=e.target.closest(".pname"); if(!inp) return;
+    const res=renamePlace(inp.dataset.old,inp.value);
+    if(res==="taken"){ const out=inp.closest(".addr").querySelector(".found"); out.className="found"; out.textContent="You already have a place with that name."; inp.value=inp.dataset.old; }
+    else if(res==="same") inp.value=inp.dataset.old;
+  });
+  addrListEl.addEventListener("keydown",e=>{ if(e.key==="Enter"&&e.target.closest(".pname")) e.target.blur(); });
+  let rmArmed=null;
+  addrListEl.addEventListener("click",e=>{
+    const b=e.target.closest("[data-rm]"); if(!b) return;
+    const pl=b.dataset.rm;
+    if(rmArmed!==b){
+      if(rmArmed){ rmArmed.classList.remove("armed"); rmArmed.textContent="Remove"; }
+      const n=placeUses(pl);
+      b.classList.add("armed"); b.textContent=n?"Tap again · "+n+" item"+(n>1?"s":"")+" move to Home":"Tap again to remove";
+      rmArmed=b; setTimeout(()=>{ if(rmArmed===b){ b.classList.remove("armed"); b.textContent="Remove"; rmArmed=null; } },4000);
+      return;
+    }
+    rmArmed=null; document.activeElement&&document.activeElement.blur&&document.activeElement.blur(); removePlace(pl);
+  });
+  document.getElementById("addPlace").addEventListener("click",async()=>{
+    const nameEl=document.getElementById("newPlace"), addrEl=document.getElementById("newAddr"), note=document.getElementById("addNote");
+    const n=nameEl.value.trim().slice(0,40), q=addrEl.value.trim();
+    if(!n){ note.textContent="Give the place a name, like Work or Gym."; nameEl.focus(); return; }
+    if(state.places.some(p=>p.toLowerCase()===n.toLowerCase())){ note.textContent="You already have a place called "+n+"."; return; }
+    state.places.push(n); nameEl.value=""; addrEl.value="";
+    note.textContent=q?"Added "+n+". Looking up the address…":"Added "+n+". Add an address below for live traffic.";
+    edited();
+    if(q){ const msg=await geocodePlace(n,q); note.textContent=msg.ok?"Added "+n+" ✓ "+msg.label:"Added "+n+", but "+msg.text; }
+  });
+  // Two taps to clear, since the page can't show a confirm dialog.
+  let resetArmed=null;
+  document.getElementById("reset").addEventListener("click",e=>{
+    const b=e.currentTarget;
+    if(!resetArmed){ b.textContent="Tap again to clear everything"; resetArmed=setTimeout(()=>{ b.textContent="Clear my schedule"; resetArmed=null; },4000); return; }
+    clearTimeout(resetArmed); resetArmed=null; b.textContent="Clear my schedule";
+    const keepSync=state.sync; state=example(); if(keepSync) state.sync={cals:[]}; save(); render();
+  });
+
+  // ---- Screenshot import ----
+  let sample=null, found=[];
+  const shot=document.getElementById("shot"), readBtn=document.getElementById("readShot"),
+        iStatus=document.getElementById("iStatus"), iResults=document.getElementById("iResults");
+  (async()=>{
+    try{
+      if(!window.claude) return;
+      sample=await claude.use("sample");
+      if(!sample) return;
+      const lim=await sample.limits().catch(()=>null);
+      if(!lim||!lim.images) return;
+      shot.accept=lim.images.mediaTypes.join(",");
+      document.getElementById("importBox").hidden=false;
+    }catch(e){}
+  })();
+  shot.addEventListener("change",()=>{
+    const f=shot.files[0];
+    document.getElementById("shotName").textContent=f?f.name:"Choose a screenshot";
+    readBtn.disabled=!f; iResults.innerHTML=""; iStatus.textContent="";
+  });
+  const HHMM=/^([01]?\d|2[0-3]):[0-5]\d$/;
+  const pad=s=>{const [h,m]=s.split(":");return h.padStart(2,"0")+":"+m;};
+  readBtn.addEventListener("click",async()=>{
+    const f=shot.files[0]; if(!f||!sample) return;
+    readBtn.disabled=true; iResults.innerHTML=""; iStatus.textContent="Reading your schedule… this can take up to a minute.";
+    try{
+      const data=await sample.json(
+        "This image is a screenshot of a student's weekly class schedule or a work shift schedule. "+
+        "Extract every recurring class, lab, section, or shift. Reply with only a JSON array, one object per item, shaped like "+
+        '{"label":"ISE 315 Lecture","days":[1,3,5],"start":"09:30","end":"10:20","location":"MGH 241"}. '+
+        "days uses 0=Sunday through 6=Saturday. start and end are 24-hour HH:MM. location is the room or building if shown, else an empty string. "+
+        "If nothing in the image is a schedule, reply with [].",
+        {images:f}
+      );
+      found=(Array.isArray(data)?data:[]).filter(x=>x&&typeof x.label==="string"&&Array.isArray(x.days)&&HHMM.test(String(x.start))&&HHMM.test(String(x.end)))
+        .map(x=>({label:x.label.trim().slice(0,80),days:[...new Set(x.days.map(Number).filter(d=>d>=0&&d<=6))],start:pad(String(x.start)),end:pad(String(x.end)),location:String(x.location||"").slice(0,60)}))
+        .filter(x=>x.days.length&&toMin(x.end)>toMin(x.start));
+      if(!found.length){ iStatus.textContent="Couldn't find any classes or shifts in that image. Try a clearer screenshot of the weekly view."; return; }
+      iStatus.textContent="Found "+found.length+". Uncheck anything you don't want.";
+      iResults.innerHTML=found.map((x,i)=>`<label class="pick"><input type="checkbox" id="pick-${i}" checked><span><b>${esc(x.label)}</b><br><span class="meta" style="color:var(--muted);font-size:14px">${x.days.map(d=>DAY_NAMES[d]).join("/")} · ${fmt(toMin(x.start))}–${fmt(toMin(x.end))}${x.location?" · "+esc(x.location):""}</span></span></label>`).join("")+
+        `<button class="btn" id="addFound" type="button" style="width:100%;margin-top:8px">Add checked to schedule</button>`;
+    }catch(e){
+      const msg={not_granted:"Claude access wasn't allowed, so the screenshot can't be read. You can still add items by hand below.",
+        rate_limited:"You've hit a usage limit. Try again in a bit.",image_rejected:"That file couldn't be read. Try a PNG or JPG screenshot.",
+        invalid_json:"Claude's answer didn't come back in a usable format. Tap Read schedule to try again.",
+        refused:"Claude couldn't read that image. Try a different screenshot."}[e&&e.code];
+      iStatus.textContent=msg||"Something went wrong reading the screenshot. Tap Read schedule to try again.";
+      if(e&&e.code==="not_granted") document.getElementById("importBox").hidden=true;
+    }finally{ readBtn.disabled=!shot.files[0]; }
+  });
+  iResults.addEventListener("click",e=>{
+    if(e.target.id!=="addFound") return;
+    const place=document.getElementById("iPlace").value; let n=0;
+    found.forEach((x,i)=>{ if(document.getElementById("pick-"+i).checked){ state.events.push({id:Date.now()+i,label:x.label,place,days:x.days,start:x.start,end:x.end}); n++; } });
+    if(state.sample){ state.events=state.events.filter(ev=>ev.id>1000); }
+    iResults.innerHTML=""; found=[]; iStatus.textContent="Added "+n+" to your schedule."; edited();
+  });
+
+  // ---- Google Calendar shift sync (one row per WhenToWork calendar) ----
+  const GC="Google Calendar";
+  let mcp=null;
+  const syncBtn=document.getElementById("syncBtn"), sStatus=document.getElementById("sStatus"), calRows=document.getElementById("calRows");
+  const localIso=dt=>ymd(dt)+"T"+String(dt.getHours()).padStart(2,"0")+":"+String(dt.getMinutes()).padStart(2,"0")+":00";
+  const hm=dt=>String(dt.getHours()).padStart(2,"0")+":"+String(dt.getMinutes()).padStart(2,"0");
+  function errCopy(e){
+    const c=e&&e.code;
+    if(c==="server_not_connected"||c==="selection_required") return "Connect Google Calendar in claude.ai Settings → Connectors, then try again.";
+    if(c==="needs_reauth") return "Google Calendar needs to be reconnected in claude.ai Settings → Connectors.";
+    if(c==="not_in_manifest") return "Google Calendar access wasn't allowed for this page. You can turn it on from the page's Permissions menu.";
+    if(c==="blocked_by_policy") return "Your organization blocks Google Calendar here.";
+    return "Couldn't reach Google Calendar. Tap Sync shifts to try again.";
+  }
+  function pickArr(p,key){ if(Array.isArray(p)) return p; if(p&&typeof p==="object"&&Array.isArray(p[key])) return p[key]; return []; }
+  function evTime(v){ if(!v) return null; if(typeof v==="object") v=v.dateTime||null; if(typeof v!=="string"||v.indexOf("T")<0) return null; const dt=new Date(v); return isNaN(dt)?null:dt; }
+  const cleanTitle=t=>String(t||"Shift").replace(/\s+\d{1,2}(:\d\d)?\s*[ap]m\s*-\s*\d{1,2}(:\d\d)?\s*[ap]m\s*$/i,"").trim().slice(0,80)||"Shift";
+  function jobName(c){ const m=/schedule for (.+)$/i.exec(c.description||""); return (m?m[1]:(c.summary||c.id)).trim(); }
+  const isW2W=c=>/whentowork|w2w|when\s*to\s*work/i.test((c.summary||"")+" "+(c.description||""));
+
+  function renderCalRows(){
+    const cals=(state.sync&&state.sync.cals)||[];
+    if(!cals.length) return;
+    calRows.innerHTML=cals.map((c,i)=>`<div class="item" style="flex-wrap:wrap">
+      <label class="pick" style="border:none;padding:0;flex:1 1 160px"><input type="checkbox" id="cal-on-${i}" data-i="${i}" ${c.on?"checked":""}><span><b>${esc(c.name)}</b></span></label>
+      <label style="flex:1 1 160px">Shifts happen at<select id="cal-place-${i}" data-i="${i}">${state.places.map(p=>`<option ${p===c.place?"selected":""}>${esc(p)}</option>`).join("")}</select></label>
+    </div>`).join("");
+  }
+  calRows.addEventListener("change",e=>{
+    const i=+e.target.dataset.i, c=state.sync&&state.sync.cals[i]; if(!c) return;
+    if(e.target.type==="checkbox") c.on=e.target.checked; else c.place=e.target.value;
+    (state.shifts||[]).forEach(s=>{ if(s.cal===c.id) s.place=c.place; });
+    state.shifts=(state.shifts||[]).filter(s=>{ const o=state.sync.cals.find(x=>x.id===s.cal); return o&&o.on; });
+    edited();
+  });
+
+  async function loadCalendars(){
+    const r=await mcp.callTool(GC,"list_calendars",{},{cache:{staleTime:3600000,gcTime:86400000}});
+    const found=pickArr(r.payload,"calendars").filter(c=>c&&c.id&&isW2W(c));
+    const prev=(state.sync&&state.sync.cals)||[];
+    state.sync=state.sync||{};
+    state.sync.cals=found.map(c=>{
+      const old=prev.find(p=>p.id===c.id); if(old) return {...old,name:jobName(c)};
+      const name=jobName(c);
+      let place=/bellevue/i.test(name)&&state.places.includes("Bellevue pool")?"Bellevue pool":null;
+      if(!place){ place=name; if(!state.places.includes(place)) state.places.push(place); }
+      return {id:c.id,name,place,on:true};
+    });
+    return state.sync.cals;
+  }
+
+  async function syncShifts(fromClick){
+    syncBtn.disabled=true; sStatus.textContent="Syncing…";
+    try{
+      const cals=await loadCalendars();
+      if(!cals.length){ save(); render(); sStatus.textContent="No WhenToWork calendars found in Google Calendar yet. Connect it from WhenToWork's Info menu, then wait up to 20 minutes."; return; }
+      const start=new Date(); start.setHours(0,0,0,0); const end=new Date(start); end.setDate(end.getDate()+42);
+      const shifts=[];
+      for(const c of cals.filter(c=>c.on)){
+        const r=await mcp.callTool(GC,"list_events",{calendarId:c.id,startTime:localIso(start),endTime:localIso(end),orderBy:"startTime",pageSize:250},{cache:{staleTime:60000,gcTime:300000,refresh:!!fromClick}});
+        pickArr(r.payload,"events").forEach((e,i)=>{
+          if(e.status==="cancelled") return;
+          const s=evTime(e.start), en=evTime(e.end);
+          if(!s||!en||en<=s||ymd(s)!==ymd(en)) return;
+          shifts.push({id:c.id+"#"+i,cal:c.id,date:ymd(s),label:cleanTitle(e.summary),start:hm(s),end:hm(en),place:c.place});
+        });
+      }
+      state.shifts=shifts; state.sync.at=Date.now();
+      if(state.sample){ state.events=state.events.filter(ev=>!/lifeguard shift/i.test(ev.label)); }
+      edited();
+      const newPlaces=cals.filter(c=>c.place===c.name&&!(state.times&&Object.keys(state.times).some(k=>k.split("|").includes(c.name))));
+      sStatus.textContent=(shifts.length?"Synced "+shifts.length+" shift"+(shifts.length>1?"s":"")+" for the next six weeks.":"No shifts in the next six weeks.")+
+        (newPlaces.length?" Set drive times for "+newPlaces.map(c=>c.name).join(", ")+" under Places & drive times.":"");
+    }catch(e){ sStatus.textContent=errCopy(e); }
+    finally{ syncBtn.disabled=false; }
+  }
+  syncBtn.addEventListener("click",()=>{ if(mcp) syncShifts(true); });
+  (async()=>{
+    try{
+      if(!window.claude) return;
+      if(!window.FEATURES||!FEATURES.shifts) return;
+      mcp=await claude.use("mcp");
+      if(!mcp) return;
+      document.getElementById("shiftBox").hidden=false;
+      if(state.sync&&state.sync.cals&&state.sync.cals.length) syncShifts(false);
+    }catch(e){}
+  })();
+
+  // ---- Live traffic (TomTom) ----
+  const TT="TomTom Maps";
+  let maps=null, trafficBusy=false;
+  async function refreshTraffic(dt){
+    if(!maps||trafficBusy) return;
+    const now=new Date(), dk=ymd(dt);
+    if(dk<ymd(now)) return;
+    const nowMin=now.getHours()*60+now.getMinutes();
+    const legs=plan(dt).legs.filter(l=>coordOf(l.from)&&coordOf(l.to)&&!(dk===ymd(now)&&l.arr<=nowMin));
+    if(!legs.length) return;
+    trafficBusy=true; let changed=false;
+    try{
+      for(const l of legs){
+        const arrive=new Date(dt); arrive.setHours(0,l.arr,0,0);
+        try{
+          const r=await maps.callTool(TT,"tomtom-routing",{locations:[coordOf(l.from),coordOf(l.to)],traffic:"live",arriveAt:arrive.toISOString()},{cache:{staleTime:600000,gcTime:3600000}});
+          const f=r.payload&&Array.isArray(r.payload.features)&&r.payload.features[0];
+          const sm=f&&f.properties&&f.properties.summary;
+          if(sm&&typeof sm.travelTimeInSeconds==="number"){
+            LIVE[liveKey(l.from,l.to,l.dk,l.arr)]={mins:Math.max(1,Math.ceil(sm.travelTimeInSeconds/60)),delay:Math.round((sm.trafficDelayInSeconds||0)/60)};
+            changed=true;
+          }
+        }catch(e){ if(e&&["not_in_manifest","server_not_connected","needs_reauth","blocked_by_policy"].includes(e.code)) break; }
+      }
+    }finally{ trafficBusy=false; }
+    if(changed) render();
+  }
+  function ttErr(e,lower){
+    const c=e&&e.code; let t;
+    if(c==="server_not_connected"||c==="selection_required") t="Live traffic isn't set up yet.";
+    else if(c==="needs_reauth") t="Live traffic isn't set up yet.";
+    else if(c==="not_in_manifest") t="Live traffic isn't set up yet.";
+    else t="Couldn't reach TomTom. Tap Find to try again.";
+    return lower?t.charAt(0).toLowerCase()+t.slice(1):t;
+  }
+  async function geocodePlace(pl,q){
+    if(!maps) return {ok:false,text:"live traffic isn't available right now. Your typical drive times will be used instead."};
+    try{
+      const r=await maps.callTool(TT,"tomtom-geocode",{query:q,limit:1,countries:["US"],position:[-122.12,47.62]});
+      const f=r.payload&&Array.isArray(r.payload.features)&&r.payload.features[0];
+      const c=f&&f.geometry&&f.geometry.coordinates;
+      if(!Array.isArray(c)||c.length!==2) return {ok:false,text:"couldn't find that address. Try adding the city."};
+      const label=(f.properties&&f.properties.address&&f.properties.address.freeformAddress)||q;
+      state.loc=state.loc||{}; state.loc[pl]={addr:q,label,coord:[+c[0],+c[1]]};
+      forgetLiveData(); if(addrListEl.contains(document.activeElement)) document.activeElement.blur(); edited(); refreshTraffic(selDate);
+      return {ok:true,label};
+    }catch(e){ return {ok:false,text:ttErr(e,true)}; }
+  }
+  document.getElementById("addrList").addEventListener("click",async e=>{
+    const b=e.target.closest("[data-find]"); if(!b) return;
+    const i=b.dataset.find, inp=document.getElementById("addr-"+i), out=document.getElementById("found-"+i), pl=inp.dataset.pl, q=inp.value.trim();
+    if(!q){ out.textContent="Type an address first."; return; }
+    if(!maps){ out.textContent="Live traffic isn't available right now, so Leave By uses your typical drive times instead."; return; }
+    b.disabled=true; out.className="found"; out.textContent="Looking it up…";
+    try{
+      const r=await maps.callTool(TT,"tomtom-geocode",{query:q,limit:1,countries:["US"],position:[-122.12,47.62]});
+      const f=r.payload&&Array.isArray(r.payload.features)&&r.payload.features[0];
+      const c=f&&f.geometry&&f.geometry.coordinates;
+      if(!Array.isArray(c)||c.length!==2){ out.textContent="Couldn't find that address. Try adding the city."; return; }
+      const label=(f.properties&&f.properties.address&&f.properties.address.freeformAddress)||q;
+      state.loc=state.loc||{}; state.loc[pl]={addr:q,label,coord:[+c[0],+c[1]]};
+      Object.keys(LIVE).forEach(k=>delete LIVE[k]);
+      document.activeElement&&document.activeElement.blur&&document.activeElement.blur();
+      edited(); refreshTraffic(selDate);
+    }catch(e){ out.textContent=ttErr(e,false); }
+    finally{ b.disabled=false; }
+  });
+  (async()=>{
+    try{
+      if(!window.claude){ document.getElementById("liveNote").hidden=false; return; }
+      maps=await claude.use("mcp");
+      if(!maps){ document.getElementById("liveNote").hidden=false; return; }
+      refreshTraffic(selDate);
+      setInterval(()=>{ if(view==="day") refreshTraffic(selDate); },600000);
+    }catch(e){}
+  })();
+
+  // ---- Compare ways to get there (Rome2Rio: typical transit estimates, not live) ----
+  const R2R="Rome2Rio";
+  let transit=null;
+  const CMP={}, OPEN={};
+  const cmpKey=l=>l.from+">"+l.to;
+  const placeQuery=pl=>{ const l=state.loc&&state.loc[pl]; return (l&&(l.label||l.addr))||pl; };
+  function modeEmoji(n){ n=n.toLowerCase(); if(/ferry/.test(n)) return "⛴️"; if(/tram|train|rail|link|subway|metro rail/.test(n)) return "🚆"; if(/bus|coach|shuttle/.test(n)) return "🚌"; if(/walk/.test(n)) return "🚶"; return "🧭"; }
+  function compareHtml(s){
+    const k=cmpKey(s.leg), c=CMP[k];
+    if(!OPEN[k]) return `<button type="button" class="cmpbtn" data-cmp="${esc(k)}">Compare car vs. transit</button>`;
+    if(!c) return `<div class="cmp"><p class="note">Checking bus and train options…</p></div>`;
+    if(c.error) return `<div class="cmp"><p class="note">${esc(c.error)}</p><button type="button" class="cmpbtn" data-cmp="${esc(k)}" data-retry="1">Try again</button></div>`;
+    const arr=s.leg.arr;
+    const opts=[{icon:"🚗",name:"Car"+(LIVE[liveKey(s.leg.from,s.leg.to,s.leg.dk,arr)]?" · live traffic":" · typical"),mins:s.driveMins}]
+      .concat(c.routes.map(r=>({icon:modeEmoji(r.name),name:r.name+(r.carriers.length?" · "+r.carriers.join(", "):""),mins:r.duration})));
+    const best=opts.reduce((a,b)=>b.mins<a.mins?b:a,opts[0]);
+    const rows=opts.map(o=>`<div class="mode ${o===best?"best":""}"><span aria-hidden="true">${o.icon}</span><span class="mn">${esc(o.name)}${o===best?'<span class="best-tag">Fastest</span>':""}</span><span class="mt">${o.mins} min</span><span class="ml">Leave by ${fmt(arr-o.mins)}</span></div>`).join("");
+    return `<div class="cmp">${rows}<p class="note">Transit times are typical estimates from Rome2Rio, not live, and don't include waiting for the bus. Check the schedule before you rely on one.</p></div>`;
+  }
+  document.getElementById("route").addEventListener("click",async e=>{
+    const b=e.target.closest("[data-cmp]"); if(!b||!transit) return;
+    const k=b.dataset.cmp, [from,to]=k.split(">");
+    OPEN[k]=true;
+    if(CMP[k]&&!CMP[k].error){ render(); return; }
+    delete CMP[k]; render();
+    try{
+      const r=await transit.callTool(R2R,"get-routes",{origin:placeQuery(from),destination:placeQuery(to),currencyCode:"USD"},{cache:{staleTime:86400000,gcTime:604800000}});
+      const list=(r.payload&&Array.isArray(r.payload.available_routes)?r.payload.available_routes:[])
+        .filter(x=>x&&typeof x.duration==="number"&&typeof x.name==="string"&&!/^(drive|taxi)$/i.test(x.name.trim())&&!/taxi|uber|lyft|rideshare/i.test(x.name))
+        .map(x=>({name:x.name.trim().slice(0,60),duration:Math.round(x.duration),carriers:Array.isArray(x.carriers)?x.carriers.map(String).slice(0,2):[]}));
+      CMP[k]=list.length?{routes:list}:{error:"No bus or train routes found for this trip. Driving is your only option here."};
+    }catch(err){
+      CMP[k]={error:err&&err.code==="not_in_manifest"?"Rome2Rio access wasn't allowed for this page. Turn it on from the page's Permissions menu.":"Couldn't reach Rome2Rio right now."};
+    }
+    render();
+  });
+  (async()=>{ try{ if(!window.claude||!window.FEATURES||!FEATURES.transit) return; transit=await claude.use("mcp"); if(transit) render(); }catch(e){} })();
+
+  // ---- Opening splash: shows briefly, tap to skip ----
+  const splash=document.getElementById("splash");
+  const hideSplash=()=>{ if(splash.classList.contains("out")) return; splash.classList.add("out"); setTimeout(()=>splash.remove(),600); };
+  splash.addEventListener("click",hideSplash);
+  setTimeout(hideSplash,matchMedia("(prefers-reduced-motion: reduce)").matches?700:1600);
+
+  // ---- Menu drawer ----
+  const drawer=document.getElementById("drawer"), scrim=document.getElementById("scrim"), menuBtn=document.getElementById("menuBtn");
+  function openMenu(){ drawer.classList.add("open"); scrim.classList.add("open"); drawer.removeAttribute("inert"); drawer.setAttribute("aria-hidden","false"); menuBtn.setAttribute("aria-expanded","true"); document.body.style.overflow="hidden"; buzz(); setTimeout(()=>document.getElementById("menuClose").focus(),50); }
+  function closeMenu(){ if(!drawer.classList.contains("open")) return; drawer.classList.remove("open"); scrim.classList.remove("open"); drawer.setAttribute("inert",""); drawer.setAttribute("aria-hidden","true"); menuBtn.setAttribute("aria-expanded","false"); document.body.style.overflow=""; menuBtn.focus(); }
+  menuBtn.addEventListener("click",openMenu);
+  document.getElementById("menuClose").addEventListener("click",closeMenu);
+  scrim.addEventListener("click",closeMenu);
+  document.addEventListener("keydown",e=>{ if(e.key==="Escape") closeMenu(); });
+
+  // ---- Display: home screen size ----
+  const sizeRange=document.getElementById("sizeRange");
+  function applySize(){ const v=Math.min(130,Math.max(85,+state.scale||100)); document.documentElement.style.setProperty("--home-scale",String(v/100)); sizeRange.value=v; document.getElementById("sizeVal").textContent=v+"%"+(v===100?" (default)":""); }
+  sizeRange.addEventListener("input",()=>{ state.scale=+sizeRange.value; applySize(); });
+  sizeRange.addEventListener("change",()=>{ save(); buzz(); });
+  applySize();
+
+  // ---- Haptics (web vibration works on Android; iPhone browsers don't allow it) ----
+  const canVibrate=typeof navigator!=="undefined"&&typeof navigator.vibrate==="function";
+  const hapticToggle=document.getElementById("hapticToggle");
+  function buzz(){ if(state.haptics!==false&&canVibrate){ try{ navigator.vibrate(10); }catch(e){} } }
+  hapticToggle.checked=state.haptics!==false;
+  if(!canVibrate) document.getElementById("hapticNote").textContent="Your phone's browser doesn't allow vibration from web apps (iPhones block it), so this has no effect here.";
+  hapticToggle.addEventListener("change",()=>{ state.haptics=hapticToggle.checked; save(); buzz(); });
+  document.addEventListener("click",e=>{ if(e.target.closest(".seg button,.days button,.arrow,.cmpbtn,.wkday,.mcell,.mini-seg button,.btn")) buzz(); });
+
+  // ---- Greeting: big on open, shrinks once you start using the page ----
+  const greet=document.getElementById("greet");
+  // First name in the greeting: the name you typed in Account, else your Claude account's first name.
+  let claudeFirst="";
+  const nickEl=document.getElementById("nick");
+  function setWho(){
+    const n=(state.nick||"").trim();
+    document.getElementById("who").textContent=n?", "+n:"";
+    if(document.activeElement!==nickEl) nickEl.value=state.nick||"";
+    nickEl.placeholder=claudeFirst||"Your first name";
+  }
+  nickEl.addEventListener("change",()=>{ state.nick=nickEl.value.trim().slice(0,30); save(); setWho(); });
+  setWho();
+
+  // Ask for a name once per person (bumping NAME_ASK_VERSION asks everyone again).
+  const NAME_ASK_VERSION=2;
+  const ask=document.getElementById("askName"), askInput=document.getElementById("askInput");
+  let askChecked=false;
+  function maybeAskName(){
+    if(askChecked) return; askChecked=true;
+    if(state.nameAsked===NAME_ASK_VERSION) return;
+    askInput.value=state.nick||claudeFirst||"";
+    const show=()=>{ ask.hidden=false; askInput.focus(); };
+    const sp=document.getElementById("splash");
+    if(sp&&!sp.classList.contains("out")) setTimeout(show,1700); else show();
+  }
+  function closeAsk(name){
+    if(name!==null) state.nick=name;
+    state.nameAsked=NAME_ASK_VERSION; ask.hidden=true; save(); setWho();
+    greet.classList.remove("mini"); setTimeout(()=>greet.classList.add("mini"),3500);
+  }
+  document.getElementById("askForm").addEventListener("submit",e=>{ e.preventDefault(); closeAsk(askInput.value.trim().slice(0,30)); });
+  document.getElementById("askSkip").addEventListener("click",()=>closeAsk(null));
+  function setHello(){ const h=new Date().getHours(); document.getElementById("hello").textContent=h<12?"Good morning":h<17?"Good afternoon":"Good evening"; }
+  setHello(); setInterval(setHello,600000);
+  function minimize(){ greet.classList.add("mini"); window.removeEventListener("scroll",onScroll); }
+  function onScroll(){ if(window.scrollY>16) minimize(); }
+  window.addEventListener("scroll",onScroll,{passive:true});
+  document.querySelector(".wrap").addEventListener("pointerdown",minimize,{once:true});
+  setTimeout(minimize,5500);
+
+  // ---- Account: signed in with Claude, schedule saved privately per person ----
+  (async()=>{
+    try{
+      if(!window.claude) return;
+      const user=await claude.use("user");
+      if(!user) return;
+      const me=await user.me();
+      // Try every way the platform offers to get the Claude account's name.
+      let full=(me.name||"").trim();
+      if(!full){ try{ full=((await user.name())||"").trim(); }catch(e){} }
+      if(!full&&me.id){ try{ const ps=await user.profiles([me.id]); full=((ps[me.id]&&ps[me.id].name)||"").trim(); }catch(e){} }
+      claudeFirst=full.split(/\s+/)[0]||"";
+      setWho(); nickEl.placeholder=claudeFirst||"Your first name";
+      if(!me.id){ setAcctNote("Sign in with Google to save your schedule and use it on any device."); return; }
+      document.getElementById("acctName").textContent=me.name||"Signed in";
+      const av=document.getElementById("avatar"); av.src=me.avatarUrl; av.hidden=false;
+      setAcctNote("Loading your saved schedule…");
+      const db=await claude.use("db");
+      if(!db){ setAcctNote("Account sync isn't available here. Saved on this device."); return; }
+      const ref=db.doc("data/users/"+me.id+"/planner");
+      const snap=await ref.get();
+      if(snap.exists){
+        let saved=null; try{ saved=JSON.parse(snap.data().state); }catch(e){}
+        if(saved&&saved.places){ state=saved; try{ localStorage.setItem(KEY,JSON.stringify(state)); }catch(e){} applyTheme(); applySize(); hapticToggle.checked=state.haptics!==false; setWho(); render(); }
+        cloud=ref; setAcctNote("Your schedule is synced to your account.");
+      }else{
+        cloud=ref;
+        if(!state.sample){ cloudSave(); setAcctNote("Saving your schedule to your account…"); }
+        else setAcctNote("Signed in. Your schedule will save to your account as you edit it.");
+      }
+    }catch(e){ setAcctNote("Couldn't reach your account. Saved on this device for now."); }
+  })().finally(maybeAskName);
+  setTimeout(maybeAskName,8000); // in case the account check hangs
+
+  render();
+  setInterval(render,60000);
+})();
+</script>
+
+</body>
+</html>

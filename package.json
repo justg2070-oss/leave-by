@@ -1,0 +1,8 @@
+{
+  "name": "leave-by",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Know exactly when to leave, with live traffic.",
+  "type": "module",
+  "engines": { "node": ">=18" }
+}
