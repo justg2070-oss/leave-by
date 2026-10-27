@@ -11,6 +11,7 @@ window.FEATURES = { shifts: false, transit: false };
   let sb = null;
   let session = null;
   let importEnabled = false;
+  let transitEnabled = false;
 
   // Start up Supabase once, using public settings served by /api/config.
   const ready = (async () => {
@@ -18,6 +19,7 @@ window.FEATURES = { shifts: false, transit: false };
       const res = await fetch("/api/config");
       const cfg = res.ok ? await res.json() : null;
       importEnabled = !!(cfg && cfg.importEnabled);
+      transitEnabled = !!(cfg && cfg.transitEnabled);
       if (cfg && cfg.supabaseUrl && cfg.supabaseAnonKey && window.supabase) {
         sb = window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseAnonKey, {
           auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true },
@@ -204,6 +206,29 @@ window.FEATURES = { shifts: false, transit: false };
     maxPromptBytes: 262144,
     images: { maxCount: 1, maxInputBytes: 20_000_000, mediaTypes: ["image/jpeg", "image/png", "image/webp", "image/gif"] },
   });
+
+  // ---------- Transit options (Google Routes on our server) ----------
+  window.LB = {
+    ready,
+    transitEnabled: async () => { await ready; return transitEnabled; },
+    async transit(from, to, arriveAt) {
+      await ready;
+      if (!sb || !session) return fail("not_signed_in");
+      const { data } = await sb.auth.getSession();
+      const token = data && data.session && data.session.access_token;
+      let res;
+      try {
+        res = await fetch("/api/transit", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: "Bearer " + (token || "") },
+          body: JSON.stringify({ from, to, arriveAt }),
+        });
+      } catch (e) { return fail("upstream_error", "network"); }
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) return fail(j.code || "upstream_error", j.error);
+      return Array.isArray(j.routes) ? j.routes : [];
+    },
+  };
 
   window.claude = {
     async use(name) {

@@ -940,43 +940,53 @@ input[type=number]{font-family:var(--mono)}
     }catch(e){}
   })();
 
-  // ---- Compare ways to get there (Rome2Rio: typical transit estimates, not live) ----
-  const R2R="Rome2Rio";
+  // ---- Compare car vs. transit (Google Routes through our server) ----
   let transit=null;
-  const CMP={}, OPEN={};
-  const cmpKey=l=>l.from+">"+l.to;
-  const placeQuery=pl=>{ const l=state.loc&&state.loc[pl]; return (l&&(l.label||l.addr))||pl; };
-  function modeEmoji(n){ n=n.toLowerCase(); if(/ferry/.test(n)) return "⛴️"; if(/tram|train|rail|link|subway|metro rail/.test(n)) return "🚆"; if(/bus|coach|shuttle/.test(n)) return "🚌"; if(/walk/.test(n)) return "🚶"; return "🧭"; }
+  const CMP={}, OPEN={}, LEGS={};
+  const cmpKey=l=>[l.from,l.to,l.dk,l.arr].map(x=>encodeURIComponent(String(x))).join("|");
+  function vehicleEmoji(t){ t=String(t||"").toUpperCase(); if(/FERRY/.test(t)) return "⛴️"; if(/RAIL|SUBWAY|TRAM|TRAIN|METRO|MONORAIL|FUNICULAR/.test(t)) return "🚆"; if(/BUS|TROLLEY/.test(t)) return "🚌"; return "🧭"; }
+  const clock=iso=>{ const d=new Date(iso); return isNaN(d)?"":fmt(d.getHours()*60+d.getMinutes()); };
+  const minsOfDay=iso=>{ const d=new Date(iso); return isNaN(d)?null:d.getHours()*60+d.getMinutes(); };
+  function lineLabel(l){ const v=String(l.type||"").toUpperCase(); const kind=/BUS|TROLLEY/.test(v)?"Bus":/FERRY/.test(v)?"Ferry":/RAIL|SUBWAY|TRAM|TRAIN|METRO/.test(v)?"Train":"Line"; const n=l.short||l.name||""; return n?(kind==="Train"&&/line|link/i.test(l.name||"")?(l.name||n):kind+" "+n):kind; }
   function compareHtml(s){
-    const k=cmpKey(s.leg), c=CMP[k];
+    const k=cmpKey(s.leg); LEGS[k]=s.leg; const c=CMP[k];
     if(!OPEN[k]) return `<button type="button" class="cmpbtn" data-cmp="${esc(k)}">Compare car vs. transit</button>`;
-    if(!c) return `<div class="cmp"><p class="note">Checking bus and train options…</p></div>`;
-    if(c.error) return `<div class="cmp"><p class="note">${esc(c.error)}</p><button type="button" class="cmpbtn" data-cmp="${esc(k)}" data-retry="1">Try again</button></div>`;
+    if(!c) return `<div class="cmp"><p class="note">Checking buses and trains…</p></div>`;
+    if(c.error) return `<div class="cmp"><p class="note">${esc(c.error)}</p>${c.retry?`<button type="button" class="cmpbtn" data-cmp="${esc(k)}">Try again</button>`:""}</div>`;
     const arr=s.leg.arr;
-    const opts=[{icon:"🚗",name:"Car"+(LIVE[liveKey(s.leg.from,s.leg.to,s.leg.dk,arr)]?" · live traffic":" · typical"),mins:s.driveMins}]
-      .concat(c.routes.map(r=>({icon:modeEmoji(r.name),name:r.name+(r.carriers.length?" · "+r.carriers.join(", "):""),mins:r.duration})));
+    const opts=[{icon:"🚗",name:"Car"+(LIVE[liveKey(s.leg.from,s.leg.to,s.leg.dk,arr)]?" · live traffic":" · typical"),detail:"",mins:s.driveMins,leave:arr-s.driveMins}]
+      .concat(c.routes.map(r=>{
+        const first=r.lines[0]||{}, lm=minsOfDay(r.leaveAt);
+        return {icon:vehicleEmoji(first.type),name:r.lines.map(lineLabel).join(" → ")||"Transit",
+          detail:(first.from?"From "+first.from+(first.departs?" at "+clock(first.departs):""):"")+(r.walkMinutes?" · "+r.walkMinutes+" min walking":""),
+          mins:r.minutes,leave:lm!=null?lm:arr-r.minutes};
+      }));
     const best=opts.reduce((a,b)=>b.mins<a.mins?b:a,opts[0]);
-    const rows=opts.map(o=>`<div class="mode ${o===best?"best":""}"><span aria-hidden="true">${o.icon}</span><span class="mn">${esc(o.name)}${o===best?'<span class="best-tag">Fastest</span>':""}</span><span class="mt">${o.mins} min</span><span class="ml">Leave by ${fmt(arr-o.mins)}</span></div>`).join("");
-    return `<div class="cmp">${rows}<p class="note">Transit times are typical estimates from Rome2Rio, not live, and don't include waiting for the bus. Check the schedule before you rely on one.</p></div>`;
+    const rows=opts.map(o=>`<div class="mode ${o===best?"best":""}"><span aria-hidden="true">${o.icon}</span><span class="mn">${esc(o.name)}${o===best?'<span class="best-tag">Fastest</span>':""}</span><span class="mt">${o.mins} min</span><span class="ml">Leave by ${fmt(o.leave)}${o.detail?" · "+esc(o.detail):""}</span></div>`).join("");
+    return `<div class="cmp">${rows}<p class="note">Transit times come from Google using real schedules for that time. Buses can still run late, so give yourself a few extra minutes.</p></div>`;
   }
   document.getElementById("route").addEventListener("click",async e=>{
     const b=e.target.closest("[data-cmp]"); if(!b||!transit) return;
-    const k=b.dataset.cmp, [from,to]=k.split(">");
+    const k=b.dataset.cmp, leg=LEGS[k]; if(!leg) return;
     OPEN[k]=true;
     if(CMP[k]&&!CMP[k].error){ render(); return; }
-    delete CMP[k]; render();
+    delete CMP[k];
+    const from=coordOf(leg.from), to=coordOf(leg.to);
+    if(!from||!to){ CMP[k]={error:"Add addresses for "+[!from?leg.from:null,!to?leg.to:null].filter(Boolean).join(" and ")+" under ☰ → Places & drive times to compare transit."}; render(); return; }
+    render();
+    const when=fromKey(leg.dk); when.setHours(0,leg.arr,0,0);
     try{
-      const r=await transit.callTool(R2R,"get-routes",{origin:placeQuery(from),destination:placeQuery(to),currencyCode:"USD"},{cache:{staleTime:86400000,gcTime:604800000}});
-      const list=(r.payload&&Array.isArray(r.payload.available_routes)?r.payload.available_routes:[])
-        .filter(x=>x&&typeof x.duration==="number"&&typeof x.name==="string"&&!/^(drive|taxi)$/i.test(x.name.trim())&&!/taxi|uber|lyft|rideshare/i.test(x.name))
-        .map(x=>({name:x.name.trim().slice(0,60),duration:Math.round(x.duration),carriers:Array.isArray(x.carriers)?x.carriers.map(String).slice(0,2):[]}));
-      CMP[k]=list.length?{routes:list}:{error:"No bus or train routes found for this trip. Driving is your only option here."};
+      const routes=await transit.transit(from,to,when.toISOString());
+      CMP[k]=routes.length?{routes}:{error:"No bus or train routes found for this trip at that time. Driving is your best option."};
     }catch(err){
-      CMP[k]={error:err&&err.code==="not_in_manifest"?"Rome2Rio access wasn't allowed for this page. Turn it on from the page's Permissions menu.":"Couldn't reach Rome2Rio right now."};
+      const c=err&&err.code;
+      CMP[k]=c==="not_signed_in"?{error:"Sign in under ☰ → Profile to compare transit."}
+        :c==="rate_limited"?{error:"Transit lookups hit today's limit. Try again tomorrow."}
+        :{error:"Couldn't check transit right now.",retry:true};
     }
     render();
   });
-  (async()=>{ try{ if(!window.claude||!window.FEATURES||!FEATURES.transit) return; transit=await claude.use("mcp"); if(transit) render(); }catch(e){} })();
+  (async()=>{ try{ if(window.LB&&await LB.transitEnabled()){ transit=LB; render(); } }catch(e){} })();
 
   // ---- Opening splash: shows briefly, tap to skip ----
   const splash=document.getElementById("splash");

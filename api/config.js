@@ -8,5 +8,6 @@ export default function handler(req, res) {
     supabaseUrl: process.env.SUPABASE_URL || "",
     supabaseAnonKey: process.env.SUPABASE_ANON_KEY || "",
     importEnabled: Boolean(process.env.ANTHROPIC_API_KEY),
+    transitEnabled: Boolean(process.env.GOOGLE_MAPS_KEY),
   });
 }
