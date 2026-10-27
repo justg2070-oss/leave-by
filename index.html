@@ -553,7 +553,7 @@ input[type=number]{font-family:var(--mono)}
   const coordOf=pl=>{ const l=state.loc&&state.loc[pl]; return l&&Array.isArray(l.coord)?l.coord:null; };
   function plan(dt){
     const evs=eventsOn(dt), dk=ymd(dt);
-    const steps=[], legs=[]; let here=state.home, freeAt=null; let firstLeave=null; let conflicts=0;
+    const steps=[], legs=[], drives=[]; let here=state.home, freeAt=null; let firstLeave=null; let conflicts=0;
     evs.forEach(e=>{
       let t=travel(here,e.place), live=null;
       if(t>0){
@@ -569,6 +569,7 @@ input[type=number]{font-family:var(--mono)}
         else if(freeAt!==null && leave-freeAt<10){ flag={k:"warn",msg:"Only "+(leave-freeAt)+" min of slack"}; }
         steps.push({type:"drive",leg:legs[legs.length-1],driveMins:t,time:leave,name:"Leave "+here,sub:t+" min drive to "+e.place+(live?(live.delay>=2?" (live, +"+live.delay+" min traffic)":" (live, roads clear)"):"")+" + "+state.buffer+" min buffer",flag});
         if(firstLeave===null) firstLeave={time:leave,to:e,live};
+        drives.push({time:leave,from:here,place:e.place,label:e.label,emoji:emojiFor(e),arrive:toMin(e.start),live,eventStart:toMin(e.start)});
       }
       steps.push({type:"stop",time:toMin(e.start),name:e.label,sub:e.place+" · until "+fmt(toMin(e.end)),wx:{place:e.place,dk,min:toMin(e.start)}});
       here=e.place; freeAt=toMin(e.end);
@@ -583,9 +584,10 @@ input[type=number]{font-family:var(--mono)}
       // After the event ends, show traffic for leaving right now instead of at the end time.
       const leaveAt=live&&live.now?Math.max(freeAt,live.at):freeAt;
       steps.push({type:"drive",time:freeAt,name:"Head home",sub:(live&&live.now?t+" min drive if you leave now":t+" min drive")+tr});
-      steps.push({type:"stop",time:leaveAt+t,name:"Home",sub:"Back by "+fmt(leaveAt+t)});
+      steps.push({type:"stop",time:leaveAt+t,name:"Home",sub:"Back by "+fmt(leaveAt+t),wx:{place:state.home,dk,min:leaveAt+t}});
+      drives.push({time:leaveAt,from:here,place:state.home,label:"Home",emoji:"🏠",arrive:leaveAt+t,live,home:true,mins:t,leavingNow:!!(live&&live.now)});
     }
-    return {steps,firstLeave,conflicts,count:evs.length,legs};
+    return {steps,firstLeave,conflicts,count:evs.length,legs,drives};
   }
 
   function render(){
@@ -605,15 +607,26 @@ input[type=number]{font-family:var(--mono)}
     if(!p.firstLeave){
       sign.innerHTML=`<div class="eyebrow">${p.count?"No driving needed":"Nothing scheduled"}</div><h1>Stay put</h1><p>${p.count?"Everything today is at "+esc(state.home)+".":"Add classes or shifts from the ☰ menu to plan this day."}</p>`;
     }else{
-      const fl=p.firstLeave;
-      let extra="", chip="";
-      if(isToday){ const mins=fl.time-(now.getHours()*60+now.getMinutes());
-        if(mins>0) chip=`<span class="chip ${mins<=15?"soon":""}">${mins<=15?"Head out soon · ":"⏱ "}${mins>=60?Math.floor(mins/60)+" h "+(mins%60)+" min":mins+" min"}</span>`;
-        else chip=`<span class="chip late">Leave time has passed</span>`; }
-      sign.innerHTML=`<div class="eyebrow">Leave ${esc(state.home)} by${extra}</div><h1>${fmt(fl.time)}</h1><p class="for">for ${esc(fl.to.label)} at ${fmt(toMin(fl.to.start))}${p.conflicts?" · ⚠️ "+p.conflicts+" conflict"+(p.conflicts>1?"s":""):""} <span class="sign-emoji" aria-hidden="true">${emojiFor(fl.to)}</span>${fl.live?`<span class="traffic">🚗 ${fl.live.delay>=2?"Traffic adds "+fl.live.delay+" min":"Live traffic · roads look clear"}</span>`:""}${(()=>{ const w=weatherAt(fl.to.place,ymd(selDate),toMin(fl.to.start)); return w?`<span class="traffic">🌡️ ${w.temp}°F, ${esc(w.label.toLowerCase())} at ${esc(fl.to.place)} ${w.icon}${w.pop>=30?" · "+w.pop+"% chance of "+(/snow/i.test(w.label)?"snow":"rain"):""}</span>`:""; })()}</p>${chip}`;
+      // Today: the next trip you haven't finished yet. Other days: the first trip.
+      const nowMin=now.getHours()*60+now.getMinutes();
+      const dr=isToday?(p.drives.find(d=>d.arrive>nowMin)||null):p.drives[0];
+      if(!dr){
+        sign.innerHTML=`<div class="eyebrow">All done for today</div><h1>You're home</h1><p>No more trips today. Check tomorrow with the arrows above.</p>`;
+      }else{
+        let chip="";
+        if(isToday){ const mins=dr.time-nowMin;
+          if(dr.home&&dr.leavingNow) chip=`<span class="chip soon">Leave now · home by ${fmt(dr.arrive)}</span>`;
+          else if(mins>0) chip=`<span class="chip ${mins<=15?"soon":""}">${mins<=15?"Head out soon · ":"⏱ "}${mins>=60?Math.floor(mins/60)+" h "+(mins%60)+" min":mins+" min"}</span>`;
+          else chip=`<span class="chip late">Leave time has passed</span>`; }
+        const what=dr.home?`home by ${fmt(dr.arrive)}`:`for ${esc(dr.label)} at ${fmt(dr.eventStart)}`;
+        const w=weatherAt(dr.place,ymd(selDate),dr.arrive);
+        const wxLine=w?`<span class="traffic">🌡️ ${w.temp}°F, ${esc(w.label.toLowerCase())} at ${esc(dr.place)} ${w.icon}${w.pop>=30?" · "+w.pop+"% chance of "+(/snow/i.test(w.label)?"snow":"rain"):""}</span>`:"";
+        const traffic=dr.live?`<span class="traffic">🚗 ${dr.live.delay>=2?"Traffic adds "+dr.live.delay+" min":"Live traffic · roads look clear"}</span>`:"";
+        sign.innerHTML=`<div class="eyebrow">Leave ${esc(dr.from)} by</div><h1>${fmt(dr.time)}</h1><p class="for">${what}${p.conflicts&&!dr.home?" · ⚠️ "+p.conflicts+" conflict"+(p.conflicts>1?"s":""):""} <span class="sign-emoji" aria-hidden="true">${dr.emoji}</span>${traffic}${wxLine}</p>${chip}`;
+      }
     }
 
-    queueWeather(p.steps.filter(s=>s.wx).map(s=>s.wx.place).concat(p.firstLeave?[p.firstLeave.to.place]:[]));
+    queueWeather(p.steps.filter(s=>s.wx).map(s=>s.wx.place));
     const r=document.getElementById("route");
     r.innerHTML=p.steps.length?p.steps.map(s=>`<li class="stop ${s.type}"><div class="t">${fmt(s.time).replace(" ","&nbsp;")}</div><div class="rail"><span class="dot"></span></div><div class="body"><div class="name">${esc(s.name)}</div><div class="sub">${esc(s.sub)}</div>${s.wx?wxChip(s.wx):""}${s.flag?`<span class="flag ${s.flag.k}">${esc(s.flag.msg)}</span>`:""}${s.leg&&transit?compareHtml(s):""}</div></li>`).join(""):`<li class="empty">No stops on ${LONG[selDate.getDay()]}.</li>`;
 
