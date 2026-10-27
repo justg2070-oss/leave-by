@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Leave By — know exactly when to leave</title>
+<meta name="description" content="Leave By tells you when to leave for class, work, and everything else, using your schedule and live traffic.">
+<meta name="theme-color" content="#14111a">
+<link rel="icon" href="/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Overpass:wght@400;600;800;900&display=swap">
+<style>
+  :root {
+    --bg:#14111a; --surface:#1e1a26; --fg:#ece8f2; --muted:#a199ad; --line:#332c3f;
+    --grad:linear-gradient(135deg,#5b2bd6 0%,#8134af 30%,#c13584 65%,#e1306c 85%,#f77737 100%);
+    color-scheme:dark;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg); font:17px/1.6 "Overpass",system-ui,-apple-system,sans-serif; }
+  .wrap { max-width:760px; margin:0 auto; padding:calc(48px + env(safe-area-inset-top)) max(20px, env(safe-area-inset-right)) calc(48px + env(safe-area-inset-bottom)) max(20px, env(safe-area-inset-left)); }
+  header { display:flex; flex-direction:column; align-items:center; text-align:center; gap:14px; }
+  .logo { width:96px; height:96px; filter:drop-shadow(0 10px 28px rgba(193,53,132,.45)); }
+  h1 { margin:0; font-weight:900; font-size:clamp(44px, 12vw, 64px); line-height:1; background:var(--grad); -webkit-background-clip:text; background-clip:text; color:transparent; }
+  .tag { margin:0; font-size:20px; color:var(--fg); max-width:30ch; text-wrap:balance; }
+  .cta { display:inline-block; margin-top:10px; padding:14px 26px; border-radius:999px; background:var(--grad); color:#fff; font-weight:800; text-decoration:none; box-shadow:0 14px 32px -10px rgba(193,53,132,.6); }
+  .cta:focus-visible { outline:3px solid #fff; outline-offset:3px; }
+  section { margin-top:48px; }
+  h2 { font-size:24px; font-weight:800; margin:0 0 14px; }
+  .features { display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:12px; }
+  .card { background:var(--surface); border:1px solid var(--line); border-radius:18px; padding:18px; }
+  .card h3 { margin:0 0 4px; font-size:17px; font-weight:800; }
+  .card p { margin:0; color:var(--muted); font-size:15px; }
+  ol { padding-left:22px; } li { margin:6px 0; }
+  .data p { color:var(--muted); }
+  footer { margin-top:56px; padding-top:20px; border-top:1px solid var(--line); display:flex; gap:18px; flex-wrap:wrap; color:var(--muted); font-size:15px; }
+  footer a, .data a { color:#d1a3ff; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <img class="logo" src="/icon.svg" alt="Leave By compass logo" width="96" height="96">
+    <h1>Leave By</h1>
+    <p class="tag">Know exactly when to walk out the door, for class, work, and everything in between.</p>
+    <a class="cta" href="/">Open Leave By</a>
+  </header>
+
+  <section>
+    <h2>What it does</h2>
+    <div class="features">
+      <div class="card"><h3>🚗 Live-traffic leave times</h3><p>Leave By looks at where you're going next and checks real traffic to tell you when to leave.</p></div>
+      <div class="card"><h3>📅 Google Calendar sync</h3><p>Optionally connect Google Calendar (read-only) to bring in classes, work shifts like WhenToWork, and other plans.</p></div>
+      <div class="card"><h3>🚌 Car vs. transit</h3><p>Compare driving with buses and trains for the same trip, using real schedules.</p></div>
+      <div class="card"><h3>🗓️ Day, week & month views</h3><p>See every drive and stop for the day, or spot your busy days at a glance.</p></div>
+      <div class="card"><h3>📸 Screenshot import</h3><p>Snap your class schedule and Leave By reads it for you, so there's less typing.</p></div>
+      <div class="card"><h3>🔒 Private by design</h3><p>Sign in with Google. Your schedule is saved to your account and only you can see it.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>How it works</h2>
+    <ol>
+      <li>Sign in with Google.</li>
+      <li>Add your places, like home, campus, and work, with their addresses.</li>
+      <li>Add your schedule by hand, from a screenshot, or by connecting Google Calendar.</li>
+      <li>Open Leave By each morning to see when to leave, with live traffic.</li>
+    </ol>
+  </section>
+
+  <section class="data">
+    <h2>How Leave By uses your Google data</h2>
+    <p>If you choose to connect Google Calendar, Leave By requests read-only access. It reads events only from the calendars you pick, and uses each event's title, time, and location to plan your route and leave times. It never creates, changes, or deletes calendar events, and it never sells or shares your data. Leave By's use of information received from Google APIs adheres to the <a href="https://developers.google.com/terms/api-services-user-data-policy">Google API Services User Data Policy</a>, including the Limited Use requirements. Full details are in our <a href="/privacy.html">privacy policy</a>.</p>
+  </section>
+
+  <footer>
+    <span>© 2026 Leave By</span>
+    <a href="/privacy.html">Privacy policy</a>
+    <a href="/">Open the app</a>
+  </footer>
+</div>
+</body>
+</html>
