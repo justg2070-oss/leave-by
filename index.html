@@ -590,6 +590,13 @@ input[type=number]{font-family:var(--mono)}
     if(!paused||paused.k!==k) return;
     state.trips=Object.assign({},state.trips||{}); state.trips[k]=paused.start; paused=null; save(); render();
   }
+  // Today's current trip: if you tapped "I'm leaving", until you arrive (early or late).
+  // If you haven't tapped yet, it waits for you until the event is over, then assumes the day moved on.
+  function isCurrentDrive(d,nowMin){
+    if(d.departed) return d.eta>nowMin;
+    if(d.home) return d.arrive>nowMin;
+    return nowMin<(d.eventEnd!=null?d.eventEnd:d.arrive);
+  }
   function plan(dt){
     const evs=eventsOn(dt), dk=ymd(dt);
     const steps=[], legs=[], drives=[]; let here=state.home, freeAt=null; let firstLeave=null; let conflicts=0;
@@ -612,10 +619,10 @@ input[type=number]{font-family:var(--mono)}
           const eta=left+t, late=eta-toMin(e.start);
           if(late>0) flag={k:late>=10?"bad":"warn",msg:"Running about "+late+" min late"};
           steps.push({type:"drive",leg:legs[legs.length-1],driveMins:t,time:left,name:"Left "+here,sub:"Arriving about "+fmt(eta)+" · "+t+" min drive"+(live?(live.delay>=2?" (live, +"+live.delay+" min traffic)":" (live, roads clear)"):""),flag,trip:{key:tk,start:left,eta}});
-          drives.push({time:left,from:here,place:e.place,label:e.label,emoji:emojiFor(e),arrive:Math.max(eta,toMin(e.start)),live,eventStart:toMin(e.start),departed:true,eta,key:tk});
+          drives.push({time:left,from:here,place:e.place,label:e.label,emoji:emojiFor(e),arrive:Math.max(eta,toMin(e.start)),live,eventStart:toMin(e.start),eventEnd:toMin(e.end),mins:t,departed:true,eta,key:tk});
         }else{
           steps.push({type:"drive",leg:legs[legs.length-1],driveMins:t,time:leave,name:"Leave "+here,sub:t+" min drive to "+e.place+(live?(live.delay>=2?" (live, +"+live.delay+" min traffic)":" (live, roads clear)"):"")+" + "+state.buffer+" min buffer",flag,key:tk});
-          drives.push({time:leave,from:here,place:e.place,label:e.label,emoji:emojiFor(e),arrive:toMin(e.start),live,eventStart:toMin(e.start),key:tk});
+          drives.push({time:leave,from:here,place:e.place,label:e.label,emoji:emojiFor(e),arrive:toMin(e.start),live,eventStart:toMin(e.start),eventEnd:toMin(e.end),mins:t,key:tk});
         }
         if(firstLeave===null) firstLeave={time:leave,to:e,live};
       }
@@ -666,7 +673,7 @@ input[type=number]{font-family:var(--mono)}
     }else{
       // Today: the next trip you haven't finished yet. Other days: the first trip.
       const nowMin=now.getHours()*60+now.getMinutes();
-      const dr=isToday?(p.drives.find(d=>d.arrive>nowMin)||null):p.drives[0];
+      const dr=isToday?(p.drives.find(d=>isCurrentDrive(d,nowMin))||null):p.drives[0];
       if(!dr){
         sign.innerHTML=`<div class="eyebrow">All done for today</div><h1>You're home</h1><p>No more trips today. Check tomorrow with the arrows above.</p>`;
       }else{
@@ -676,7 +683,7 @@ input[type=number]{font-family:var(--mono)}
         const homeBy=homeNow?Math.max(dr.arrive,nowMin+(dr.mins||0)):dr.arrive;
         if(isToday){ const mins=dr.time-nowMin;
           // Within 30 minutes of leaving, the white pill doubles as the "I'm leaving" button.
-          const tappable=!dr.departed&&dr.key&&mins<=30;
+          const tappable=!dr.departed&&dr.key&&mins<=60;
           const driveMins=dr.mins||Math.max(0,dr.arrive-dr.time);
           let label;
           if(homeNow||mins<=0) label=`Leave now · ${driveMins} min drive`;
@@ -696,11 +703,13 @@ input[type=number]{font-family:var(--mono)}
           const late2=!dr.home&&dr.eta>dr.eventStart?` · about ${dr.eta-dr.eventStart} min late`:"";
           sign.innerHTML=`<div class="eyebrow">On the way ${dr.home?"home":"to "+esc(dr.place)} · arriving</div><h1>${fmt(dr.eta)}</h1><p class="for">left ${esc(dr.from)} at ${fmt(dr.time)}${dr.home?"":" for "+esc(dr.label)}${late2} <span class="sign-emoji" aria-hidden="true">${dr.emoji}</span>${tr2}${wx2}</p>${dr.key&&left2>0?`<button type="button" class="chip go on" data-undo="${esc(dr.key)}" aria-pressed="true" aria-label="On my way, ${left2} min to go. Tap again if you haven't left yet.">✓ On my way · ${left2} min to go<span class="go-arrow" aria-hidden="true">✕</span></button>`:`<span class="chip">⏱ ${left2>0?left2+" min to go":"Arriving now"}</span>`}`;
         }else{
-        const what=dr.home?`home by ${fmt(homeBy)}`:`for ${esc(dr.label)} at ${fmt(dr.eventStart)}`;
+        const lateBy=isToday&&!dr.home?nowMin+(dr.mins||0)-dr.eventStart:0;
+        const what=dr.home?`home by ${fmt(homeBy)}`:`for ${esc(dr.label)} at ${fmt(dr.eventStart)}${lateBy>0?` · about ${lateBy} min late`:""}`;
         const w=weatherAt(dr.place,ymd(selDate),dr.arrive);
         const wxLine=w?`<span class="traffic">🌡️ ${w.temp}°F, ${esc(w.label.toLowerCase())} at ${esc(dr.place)} ${w.icon}${w.pop>=30?" · "+w.pop+"% chance of "+(/snow/i.test(w.label)?"snow":"rain"):""}</span>`:"";
         const traffic=dr.live?`<span class="traffic">🚗 ${dr.live.delay>=2?"Traffic adds "+dr.live.delay+" min":"Live traffic · roads look clear"}</span>`:"";
-        sign.innerHTML=`<div class="eyebrow">Leave ${esc(dr.from)} by</div><h1>${fmt(dr.time)}</h1><p class="for">${what}${p.conflicts&&!dr.home?" · ⚠️ "+p.conflicts+" conflict"+(p.conflicts>1?"s":""):""} <span class="sign-emoji" aria-hidden="true">${dr.emoji}</span>${traffic}${wxLine}</p>${chip}`;
+        const runLate=isToday&&!dr.home&&nowMin>dr.time;
+        sign.innerHTML=`<div class="eyebrow">${runLate?`Leave ${esc(dr.from)} now · arrive about`:`Leave ${esc(dr.from)} by`}</div><h1>${fmt(runLate?nowMin+(dr.mins||0):dr.time)}</h1><p class="for">${what}${p.conflicts&&!dr.home?" · ⚠️ "+p.conflicts+" conflict"+(p.conflicts>1?"s":""):""} <span class="sign-emoji" aria-hidden="true">${dr.emoji}</span>${traffic}${wxLine}</p>${chip}`;
         }
       }
     }
@@ -709,13 +718,21 @@ input[type=number]{font-family:var(--mono)}
     const r=document.getElementById("route");
     // Where are we along today's route? Each row's line runs from its time to the next row's time.
     const nowM=now.getHours()*60+now.getMinutes();
-    const nextKey=isToday?((p.drives.find(d=>d.arrive>nowM)||{}).key||null):null;
+    const nextKey=isToday?((p.drives.find(d=>isCurrentDrive(d,nowM))||{}).key||null):null;
+    // The dot only moves past a stop once you've actually got there: on a trip you tapped, when the drive's done;
+    // on your next trip you haven't tapped, it waits at the start (until that event is over).
+    let hold=false, arrived=false;
     const prog=p.steps.map((s,i)=>{
-      if(!isToday) return {reached:false,p:0,here:false};
-      if(s.trip){ const f=Math.min(1,Math.max(0,(nowM-s.trip.start)/Math.max(1,s.trip.eta-s.trip.start))); return {reached:true,p:f,here:f<1}; }
-      // Your next drive's leave time has passed but you haven't tapped "I'm leaving": wait at the start.
-      if(s.type==="drive"&&s.key&&s.key===nextKey&&nowM>=s.time) return {reached:true,p:0,here:true};
-      const nx=p.steps[i+1], reached=nowM>=s.time;
+      if(!isToday||hold) return {reached:false,p:0,here:false};
+      const justArrived=arrived; arrived=false;
+      if(s.trip){
+        if(nowM<s.trip.eta){ hold=true; const f=Math.min(1,Math.max(0,(nowM-s.trip.start)/Math.max(1,s.trip.eta-s.trip.start))); return {reached:true,p:f,here:true}; }
+        arrived=true; return {reached:true,p:1,here:false};
+      }
+      if(s.type==="drive"&&s.key&&s.key===nextKey&&nowM>=s.time){ hold=true; return {reached:true,p:0,here:true}; }
+      const nx=p.steps[i+1], reached=justArrived||nowM>=s.time;
+      // Got there early: wait at the stop until it starts.
+      if(justArrived&&nowM<s.time) return {reached:true,p:0,here:true};
       if(!nx) return {reached,p:0,here:false};
       const span=Math.max(1,nx.time-s.time), f=Math.min(1,Math.max(0,(nowM-s.time)/span));
       return {reached,p:f,here:f>0&&f<1};
