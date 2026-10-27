@@ -546,8 +546,11 @@ input[type=number]{font-family:var(--mono)}
       legs.push(leg);
       const live=LIVE[liveKey(here,state.home,dk,"d"+freeAt)]||null;
       const t=live?live.mins:travel(here,state.home);
-      steps.push({type:"drive",time:freeAt,name:"Head home",sub:t+" min drive"+(live?(live.delay>=2?" (live, +"+live.delay+" min traffic)":" (live, roads clear)"):"")});
-      steps.push({type:"stop",time:freeAt+t,name:"Home",sub:"Back by "+fmt(freeAt+t)});
+      const tr=live?(live.delay>=2?" (live, +"+live.delay+" min traffic)":" (live, roads clear)"):"";
+      // After the event ends, show traffic for leaving right now instead of at the end time.
+      const leaveAt=live&&live.now?Math.max(freeAt,live.at):freeAt;
+      steps.push({type:"drive",time:freeAt,name:"Head home",sub:(live&&live.now?t+" min drive if you leave now":t+" min drive")+tr});
+      steps.push({type:"stop",time:leaveAt+t,name:"Home",sub:"Back by "+fmt(leaveAt+t)});
     }
     return {steps,firstLeave,conflicts,count:evs.length,legs};
   }
@@ -911,19 +914,27 @@ input[type=number]{font-family:var(--mono)}
     const now=new Date(), dk=ymd(dt);
     if(dk<ymd(now)) return;
     const nowMin=now.getHours()*60+now.getMinutes();
-    const legs=plan(dt).legs.filter(l=>coordOf(l.from)&&coordOf(l.to)&&!(dk===ymd(now)&&(l.dep!=null?l.dep:l.arr)<=nowMin));
+    const isToday=dk===ymd(now);
+    const legs=plan(dt).legs.filter(l=>{
+      if(!coordOf(l.from)||!coordOf(l.to)) return false;
+      if(!isToday) return true;
+      if(l.dep!=null) return nowMin-l.dep<=180; // drive home: keep it live while you're likely on the way
+      return l.arr>nowMin;
+    });
     if(!legs.length) return;
     trafficBusy=true; let changed=false;
     try{
       for(const l of legs){
         const isDep=l.dep!=null, at=new Date(dt); at.setHours(0,isDep?l.dep:l.arr,0,0);
-        const when=isDep?{departAt:at.toISOString()}:{arriveAt:at.toISOString()};
+        const leavingNow=isDep&&isToday&&l.dep<=nowMin;
+        // Once the drive home has started, ask for traffic right now (rounded to 5 min so repeat checks reuse the answer).
+        const when=leavingNow?{departNow:Math.floor(nowMin/5)}:isDep?{departAt:at.toISOString()}:{arriveAt:at.toISOString()};
         try{
           const r=await maps.callTool(TT,"tomtom-routing",{locations:[coordOf(l.from),coordOf(l.to)],traffic:"live",...when},{cache:{staleTime:600000,gcTime:3600000}});
           const f=r.payload&&Array.isArray(r.payload.features)&&r.payload.features[0];
           const sm=f&&f.properties&&f.properties.summary;
           if(sm&&typeof sm.travelTimeInSeconds==="number"){
-            LIVE[liveKey(l.from,l.to,l.dk,isDep?"d"+l.dep:l.arr)]={mins:Math.max(1,Math.ceil(sm.travelTimeInSeconds/60)),delay:Math.round((sm.trafficDelayInSeconds||0)/60)};
+            LIVE[liveKey(l.from,l.to,l.dk,isDep?"d"+l.dep:l.arr)]={mins:Math.max(1,Math.ceil(sm.travelTimeInSeconds/60)),delay:Math.round((sm.trafficDelayInSeconds||0)/60),now:leavingNow,at:nowMin};
             changed=true;
           }
         }catch(e){ if(e&&["not_in_manifest","server_not_connected","needs_reauth","blocked_by_policy"].includes(e.code)) break; }
@@ -977,7 +988,7 @@ input[type=number]{font-family:var(--mono)}
       maps=await claude.use("mcp");
       if(!maps){ document.getElementById("liveNote").hidden=false; return; }
       refreshTraffic(selDate);
-      setInterval(()=>{ if(view==="day") refreshTraffic(selDate); },600000);
+      setInterval(()=>{ if(view==="day") refreshTraffic(selDate); },300000);
     }catch(e){}
   })();
 
