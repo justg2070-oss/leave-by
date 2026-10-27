@@ -798,13 +798,13 @@ input[type=number]{font-family:var(--mono)}
   const isNoise=c=>/#holiday@|#contacts@|addressbook#|#weeknum@|#weather@/i.test(c.id||"")||/^(holidays in|birthdays|week numbers)/i.test(c.summary||"");
   // Match an event's location text to one of your saved places (by name or saved address).
   function matchPlace(loc){
-    const t=String(loc||"").toLowerCase().trim(); if(t.length<3) return null;
+    const t=String(loc||"").toLowerCase().trim(); if(t.length<2) return null; const t0=t.split(",")[0].trim();
     for(const p of state.places){
       const name=p.toLowerCase(); const l=(state.loc||{})[p]||{};
       const addr=String(l.addr||"").toLowerCase(), label=String(l.label||"").toLowerCase();
       const street=(addr||label).split(",")[0].trim();
       if(p!==state.home&&name.length>=2&&new RegExp("(^|[^a-z0-9])"+name.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")+"($|[^a-z0-9])").test(t)) return p;
-      if(street.length>=6&&(t.includes(street)||street.includes(t.split(",")[0].trim()))) return p;
+      if(street.length>=6&&(t.includes(street)||(t0.length>=6&&street.includes(t0)))) return p;
     }
     return null;
   }
