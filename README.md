@@ -54,3 +54,5 @@ Open your Vercel address, tap **☰ → Profile → Sign in with Google**, and y
 
 ## Shift sync (Google Calendar)
 In Google Cloud, enable the **Google Calendar API** and add the `calendar.readonly` scope under **Google Auth Platform → Data Access**. Until Google verifies the app, people connecting their calendar see an "unverified app" screen and the app is limited to 100 users.
+
+To keep people connected (instead of reconnecting every hour), run the `calendar_tokens` part of `supabase/schema.sql` and add these Vercel env vars: `SUPABASE_SERVICE_ROLE_KEY` (Supabase → Project Settings → API Keys → secret key), `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` (the same OAuth client used for Google sign-in). `api/calendar-token.js` stores Google's refresh token server-side and renews access in the background.

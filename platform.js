@@ -26,11 +26,20 @@ window.FEATURES = { shifts: true, transit: false };
         });
         const { data } = await sb.auth.getSession();
         session = data.session;
-        // Coming back from "Connect Google Calendar": keep the calendar access token for this hour.
+        // Coming back from "Connect Google Calendar": keep this hour's access token, and
+        // hand Google's refresh token to our server so we never have to ask again.
         try {
           if (localStorage.getItem("lb.gcalPending") && session && session.provider_token) {
-            localStorage.setItem("lb.gcal", JSON.stringify({ token: session.provider_token, at: Date.now() }));
+            localStorage.setItem("lb.gcal", JSON.stringify({ token: session.provider_token, at: Date.now(), ttl: 55 * 60 * 1000 }));
+            localStorage.setItem("lb.gcalLinked", "1");
             localStorage.setItem("lb.gcalJustConnected", "1");
+            if (session.provider_refresh_token) {
+              fetch("/api/calendar-token", {
+                method: "POST",
+                headers: { "Content-Type": "application/json", Authorization: "Bearer " + session.access_token },
+                body: JSON.stringify({ action: "store", refreshToken: session.provider_refresh_token }),
+              }).catch(() => {});
+            }
           }
           localStorage.removeItem("lb.gcalPending");
         } catch (e) {}
@@ -58,7 +67,7 @@ window.FEATURES = { shifts: true, transit: false };
       btn.onclick = async () => {
         btn.disabled = true;
         await sb.auth.signOut();
-        try { ["leaveby.v1", "lb.gcal", "lb.gcalPending", "lb.gcalJustConnected"].forEach((k) => localStorage.removeItem(k)); } catch (e) {}
+        try { ["leaveby.v1", "lb.gcal", "lb.gcalLinked", "lb.gcalPending", "lb.gcalJustConnected"].forEach((k) => localStorage.removeItem(k)); } catch (e) {}
         location.reload();
       };
     } else {
@@ -139,12 +148,41 @@ window.FEATURES = { shifts: true, transit: false };
 
   // ---------- Google Calendar (read-only, straight from the browser with the user's own token) ----------
   const GCAL_SCOPE = "https://www.googleapis.com/auth/calendar.readonly";
-  function calendarToken() {
+  function cachedCalendarToken() {
     try {
       const g = JSON.parse(localStorage.getItem("lb.gcal") || "null");
-      if (g && g.token && Date.now() - g.at < 55 * 60 * 1000) return g.token;
+      if (g && g.token && Date.now() - g.at < (g.ttl || 55 * 60 * 1000)) return g.token;
     } catch (e) {}
     return null;
+  }
+  // Use this hour's token if we have one; otherwise ask our server to renew it quietly.
+  let renewing = null;
+  async function calendarToken() {
+    const t = cachedCalendarToken(); if (t) return t;
+    if (renewing) return renewing;
+    renewing = (async () => {
+      await ready;
+      if (!sb || !session) return null;
+      const { data } = await sb.auth.getSession();
+      const jwt = data && data.session && data.session.access_token;
+      if (!jwt) return null;
+      try {
+        const r = await fetch("/api/calendar-token", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: "Bearer " + jwt },
+          body: JSON.stringify({ action: "access" }),
+        });
+        const j = await r.json().catch(() => ({}));
+        if (j.accessToken) {
+          localStorage.setItem("lb.gcal", JSON.stringify({ token: j.accessToken, at: Date.now(), ttl: Math.max(60, (j.expiresIn || 3600) - 300) * 1000 }));
+          localStorage.setItem("lb.gcalLinked", "1");
+          return j.accessToken;
+        }
+        if (j.code === "needs_reauth") localStorage.removeItem("lb.gcalLinked");
+      } catch (e) {}
+      return null;
+    })();
+    try { return await renewing; } finally { renewing = null; }
   }
   async function connectCalendar() {
     await ready;
@@ -155,14 +193,15 @@ window.FEATURES = { shifts: true, transit: false };
       options: {
         redirectTo: location.origin + location.pathname,
         scopes: GCAL_SCOPE,
-        // Always show Google's permission screen so people can see exactly what Leave By asks for.
-        queryParams: { include_granted_scopes: "true", prompt: "consent" },
+        // "offline" + "consent" makes Google hand over a refresh token. This screen appears
+        // only when someone connects; after that, our server renews access in the background.
+        queryParams: { include_granted_scopes: "true", access_type: "offline", prompt: "consent" },
       },
     });
     if (error) return fail("upstream_error", error.message);
   }
   async function gcalGet(path, params) {
-    const token = calendarToken();
+    const token = await calendarToken();
     if (!token) return fail("needs_reauth");
     const url = "https://www.googleapis.com/calendar/v3/" + path + (params ? "?" + new URLSearchParams(params) : "");
     let r;
@@ -273,7 +312,7 @@ window.FEATURES = { shifts: true, transit: false };
   window.LB = {
     ready,
     signedIn: async () => { await ready; return !!(sb && session); },
-    calendarConnected: () => !!calendarToken(),
+    calendarConnected: () => { try { return !!cachedCalendarToken() || !!localStorage.getItem("lb.gcalLinked"); } catch (e) { return false; } },
     connectCalendar,
     takeJustConnected: () => { try { const v = localStorage.getItem("lb.gcalJustConnected"); localStorage.removeItem("lb.gcalJustConnected"); return !!v; } catch (e) { return false; } },
     transitEnabled: async () => { await ready; return transitEnabled; },

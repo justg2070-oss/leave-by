@@ -34,3 +34,13 @@ end $$;
 drop trigger if exists planners_touch on public.planners;
 create trigger planners_touch before update on public.planners
   for each row execute function public.touch_planner();
+
+-- Google Calendar renewal keys (so people don't have to reconnect every hour).
+-- Row-level security is on with NO policies, so browsers can never read these;
+-- only the server function api/calendar-token.js can, using the service key.
+create table if not exists public.calendar_tokens (
+  user_id       uuid primary key references auth.users (id) on delete cascade,
+  refresh_token text not null,
+  updated_at    timestamptz not null default now()
+);
+alter table public.calendar_tokens enable row level security;
