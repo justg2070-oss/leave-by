@@ -103,6 +103,11 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 .leaving{display:block;margin-top:6px;padding:2px 0;border:none;background:none;color:var(--accent-text);font:700 13px var(--body);cursor:pointer;min-height:28px;opacity:.85}
 .leaving:hover{opacity:1;text-decoration:underline}
 .leaving.undo{color:var(--muted);font-weight:600}
+button.chip{border:none;font-family:inherit;cursor:pointer}
+.chip.go{padding:8px 14px;box-shadow:0 6px 18px -8px rgba(0,0,0,.45);transition:transform .12s ease}
+.chip.go:active{transform:scale(.97)}
+.chip.go:focus-visible{outline:3px solid #fff;outline-offset:3px}
+.go-arrow{display:inline-grid;place-items:center;width:22px;height:22px;margin-left:2px;border-radius:50%;background:linear-gradient(135deg,#8134af,#e1306c);color:#fff;font-size:13px;font-weight:800}
 .wx{display:inline-flex;align-items:center;gap:5px;margin-top:5px;padding:2px 9px;border-radius:999px;background:var(--bg);border:1px solid var(--line);font-size:13px;font-weight:600;color:var(--fg)}
 .wx .pop{color:var(--muted);font-weight:600}
 .flag{display:inline-block;margin-top:6px;padding:3px 8px;border-radius:6px;font-size:13px;font-weight:600}
@@ -659,9 +664,16 @@ input[type=number]{font-family:var(--mono)}
         const homeNow=dr.home&&isToday&&(dr.leavingNow||dr.time<=nowMin);
         const homeBy=homeNow?Math.max(dr.arrive,nowMin+(dr.mins||0)):dr.arrive;
         if(isToday){ const mins=dr.time-nowMin;
-          if(homeNow) chip=`<span class="chip soon">Leave now · ${dr.mins||0} min drive</span>`;
-          else if(mins>0) chip=`<span class="chip ${mins<=15?"soon":""}">${mins<=15?"Head out soon · ":"⏱ "}${mins>=60?Math.floor(mins/60)+" h "+(mins%60)+" min":mins+" min"}</span>`;
-          else chip=`<span class="chip late">Leave time has passed</span>`; }
+          // Within 30 minutes of leaving, the white pill doubles as the "I'm leaving" button.
+          const tappable=!dr.departed&&dr.key&&mins<=30;
+          const driveMins=dr.mins||Math.max(0,dr.arrive-dr.time);
+          let label;
+          if(homeNow||mins<=0) label=`Leave now · ${driveMins} min drive`;
+          else if(mins<=15) label=`Head out soon · ${mins} min`;
+          else label=`⏱ ${mins>=60?Math.floor(mins/60)+" h "+(mins%60)+" min":mins+" min"}`;
+          chip=tappable
+            ?`<button type="button" class="chip soon go" data-leave="${esc(dr.key)}" aria-label="${esc(label)}. Tap when you leave.">${label}<span class="go-arrow" aria-hidden="true">→</span></button>`
+            :`<span class="chip ${mins<=15?"soon":""}">${label}</span>`; }
         if(dr.departed){
           const left2=dr.eta-nowMin;
           const w2=weatherAt(dr.place,ymd(selDate),dr.eta);
@@ -1025,6 +1037,9 @@ input[type=number]{font-family:var(--mono)}
     }catch(e){}
   })();
 
+  document.getElementById("sign").addEventListener("click",e=>{
+    const go=e.target.closest("[data-leave]"); if(go){ startTrip(go.dataset.leave); }
+  });
   document.getElementById("route").addEventListener("click",e=>{
     const go=e.target.closest("[data-leave]"); if(go){ startTrip(go.dataset.leave); return; }
     const un=e.target.closest("[data-undo]"); if(un){ undoTrip(un.dataset.undo); }
