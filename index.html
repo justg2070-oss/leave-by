@@ -342,10 +342,10 @@ input[type=number]{font-family:var(--mono)}
   </section>
 
   <details id="shiftBox" hidden>
-    <summary>Work shifts from Google Calendar</summary>
+    <summary>Google Calendar</summary>
     <div class="panel">
-      <p class="note">Connect your Google Calendar (read-only) and Leave By pulls in your next six weeks of WhenToWork shifts. Pick where each job's shifts happen.</p>
-      <div id="calRows"><p class="note">Tap below to connect Google Calendar and find your WhenToWork calendars.</p></div>
+      <p class="note">Connect Google Calendar (read-only) to bring your next six weeks of events into Leave By, including WhenToWork shifts. Choose which calendars to include. If an event's location matches one of your places, Leave By uses it; otherwise it uses the place you pick here.</p>
+      <div id="calRows"><p class="note">Tap below to connect Google Calendar.</p></div>
       <button class="btn grad" id="syncBtn" type="button">Connect Google Calendar</button>
       <p class="note" id="sStatus" aria-live="polite"></p>
     </div>
@@ -794,34 +794,55 @@ input[type=number]{font-family:var(--mono)}
   const cleanTitle=t=>String(t||"Shift").replace(/\s+\d{1,2}(:\d\d)?\s*[ap]m\s*-\s*\d{1,2}(:\d\d)?\s*[ap]m\s*$/i,"").trim().slice(0,80)||"Shift";
   function jobName(c){ const m=/schedule for (.+)$/i.exec(c.description||""); return (m?m[1]:(c.summary||c.id)).trim(); }
   const isW2W=c=>/whentowork|w2w|when\s*to\s*work/i.test((c.summary||"")+" "+(c.description||""));
+  // Calendars that are never useful as stops: holidays, birthdays, contacts, week numbers.
+  const isNoise=c=>/#holiday@|#contacts@|addressbook#|#weeknum@|#weather@/i.test(c.id||"")||/^(holidays in|birthdays|week numbers)/i.test(c.summary||"");
+  // Match an event's location text to one of your saved places (by name or saved address).
+  function matchPlace(loc){
+    const t=String(loc||"").toLowerCase().trim(); if(t.length<3) return null;
+    for(const p of state.places){
+      const name=p.toLowerCase(); const l=(state.loc||{})[p]||{};
+      const addr=String(l.addr||"").toLowerCase(), label=String(l.label||"").toLowerCase();
+      const street=(addr||label).split(",")[0].trim();
+      if(p!==state.home&&name.length>=2&&new RegExp("(^|[^a-z0-9])"+name.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")+"($|[^a-z0-9])").test(t)) return p;
+      if(street.length>=6&&(t.includes(street)||street.includes(t.split(",")[0].trim()))) return p;
+    }
+    return null;
+  }
 
   function renderCalRows(){
     const cals=(state.sync&&state.sync.cals)||[];
     if(!cals.length) return;
     calRows.innerHTML=cals.map((c,i)=>`<div class="item" style="flex-wrap:wrap">
       <label class="pick" style="border:none;padding:0;flex:1 1 160px"><input type="checkbox" id="cal-on-${i}" data-i="${i}" ${c.on?"checked":""}><span><b>${esc(c.name)}</b></span></label>
-      <label style="flex:1 1 160px">Shifts happen at<select id="cal-place-${i}" data-i="${i}">${state.places.map(p=>`<option ${p===c.place?"selected":""}>${esc(p)}</option>`).join("")}</select></label>
+      <label style="flex:1 1 160px">Events happen at<select id="cal-place-${i}" data-i="${i}">${state.places.map(p=>`<option ${p===c.place?"selected":""}>${esc(p)}</option>`).join("")}</select></label>
     </div>`).join("");
   }
   calRows.addEventListener("change",e=>{
     const i=+e.target.dataset.i, c=state.sync&&state.sync.cals[i]; if(!c) return;
+    const turnedOn=e.target.type==="checkbox"&&e.target.checked&&!c.on;
     if(e.target.type==="checkbox") c.on=e.target.checked; else c.place=e.target.value;
-    (state.shifts||[]).forEach(s=>{ if(s.cal===c.id) s.place=c.place; });
+    (state.shifts||[]).forEach(s=>{ if(s.cal===c.id&&!s.matched) s.place=c.place; });
     state.shifts=(state.shifts||[]).filter(s=>{ const o=state.sync.cals.find(x=>x.id===s.cal); return o&&o.on; });
     edited();
+    if(turnedOn) syncShifts(false);
   });
 
   async function loadCalendars(){
     const r=await mcp.callTool(GC,"list_calendars",{},{cache:{staleTime:3600000,gcTime:86400000}});
-    const found=pickArr(r.payload,"calendars").filter(c=>c&&c.id&&isW2W(c));
+    const found=pickArr(r.payload,"calendars").filter(c=>c&&c.id&&!isNoise(c))
+      .sort((a,b)=>(isW2W(b)-isW2W(a))||((!!b.primary)-(!!a.primary)));
     const prev=(state.sync&&state.sync.cals)||[];
     state.sync=state.sync||{};
     state.sync.cals=found.map(c=>{
-      const old=prev.find(p=>p.id===c.id); if(old) return {...old,name:jobName(c)};
-      const name=jobName(c);
-      let place=/bellevue/i.test(name)&&state.places.includes("Bellevue pool")?"Bellevue pool":null;
-      if(!place){ place=name; if(!state.places.includes(place)) state.places.push(place); }
-      return {id:c.id,name,place,on:true};
+      const w2w=isW2W(c);
+      const name=w2w?jobName(c):(c.primary?"My calendar":(c.summary||c.id));
+      const old=prev.find(p=>p.id===c.id); if(old) return {...old,name};
+      let place=state.home;
+      if(w2w){
+        place=/bellevue/i.test(name)&&state.places.includes("Bellevue pool")?"Bellevue pool":null;
+        if(!place){ place=name; if(!state.places.includes(place)) state.places.push(place); }
+      }
+      return {id:c.id,name,place,on:w2w||!!c.primary};
     });
     return state.sync.cals;
   }
@@ -830,7 +851,7 @@ input[type=number]{font-family:var(--mono)}
     syncBtn.disabled=true; sStatus.textContent="Syncing…";
     try{
       const cals=await loadCalendars();
-      if(!cals.length){ save(); render(); sStatus.textContent="No WhenToWork calendars found in Google Calendar yet. Connect it from WhenToWork's Info menu, then wait up to 20 minutes."; return; }
+      if(!cals.length){ save(); render(); sStatus.textContent="No calendars found on your Google account."; return; }
       const start=new Date(); start.setHours(0,0,0,0); const end=new Date(start); end.setDate(end.getDate()+42);
       const shifts=[];
       for(const c of cals.filter(c=>c.on)){
@@ -839,14 +860,15 @@ input[type=number]{font-family:var(--mono)}
           if(e.status==="cancelled") return;
           const s=evTime(e.start), en=evTime(e.end);
           if(!s||!en||en<=s||ymd(s)!==ymd(en)) return;
-          shifts.push({id:c.id+"#"+i,cal:c.id,date:ymd(s),label:cleanTitle(e.summary),start:hm(s),end:hm(en),place:c.place});
+          const mp=matchPlace(e.location);
+          shifts.push({id:c.id+"#"+i,cal:c.id,date:ymd(s),label:cleanTitle(e.summary||"Event"),start:hm(s),end:hm(en),place:mp||c.place,matched:!!mp});
         });
       }
       state.shifts=shifts; state.sync.at=Date.now();
       if(state.sample){ state.events=state.events.filter(ev=>!/lifeguard shift/i.test(ev.label)); }
       edited();
       const newPlaces=cals.filter(c=>c.place===c.name&&!(state.times&&Object.keys(state.times).some(k=>k.split("|").includes(c.name))));
-      sStatus.textContent=(shifts.length?"Synced "+shifts.length+" shift"+(shifts.length>1?"s":"")+" for the next six weeks.":"No shifts in the next six weeks.")+
+      sStatus.textContent=(shifts.length?"Synced "+shifts.length+" event"+(shifts.length>1?"s":"")+" for the next six weeks.":"No timed events in the next six weeks on the calendars you picked.")+
         (newPlaces.length?" Set drive times for "+newPlaces.map(c=>c.name).join(", ")+" under Places & drive times.":"");
     }catch(e){
       if(e&&e.code==="needs_reauth"&&window.LB){
