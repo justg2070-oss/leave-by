@@ -624,11 +624,14 @@ input[type=number]{font-family:var(--mono)}
         sign.innerHTML=`<div class="eyebrow">All done for today</div><h1>You're home</h1><p>No more trips today. Check tomorrow with the arrows above.</p>`;
       }else{
         let chip="";
+        // Heading home after the last event: arrival counts from right now.
+        const homeNow=dr.home&&isToday&&(dr.leavingNow||dr.time<=nowMin);
+        const homeBy=homeNow?Math.max(dr.arrive,nowMin+(dr.mins||0)):dr.arrive;
         if(isToday){ const mins=dr.time-nowMin;
-          if(dr.home&&(dr.leavingNow||mins<=0)) chip=`<span class="chip soon">Leave now · home by ${fmt(Math.max(dr.arrive,nowMin+(dr.mins||0)))}</span>`;
+          if(homeNow) chip=`<span class="chip soon">Leave now · ${dr.mins||0} min drive</span>`;
           else if(mins>0) chip=`<span class="chip ${mins<=15?"soon":""}">${mins<=15?"Head out soon · ":"⏱ "}${mins>=60?Math.floor(mins/60)+" h "+(mins%60)+" min":mins+" min"}</span>`;
           else chip=`<span class="chip late">Leave time has passed</span>`; }
-        const what=dr.home?`home by ${fmt(dr.arrive)}`:`for ${esc(dr.label)} at ${fmt(dr.eventStart)}`;
+        const what=dr.home?`home by ${fmt(homeBy)}`:`for ${esc(dr.label)} at ${fmt(dr.eventStart)}`;
         const w=weatherAt(dr.place,ymd(selDate),dr.arrive);
         const wxLine=w?`<span class="traffic">🌡️ ${w.temp}°F, ${esc(w.label.toLowerCase())} at ${esc(dr.place)} ${w.icon}${w.pop>=30?" · "+w.pop+"% chance of "+(/snow/i.test(w.label)?"snow":"rain"):""}</span>`:"";
         const traffic=dr.live?`<span class="traffic">🚗 ${dr.live.delay>=2?"Traffic adds "+dr.live.delay+" min":"Live traffic · roads look clear"}</span>`:"";
