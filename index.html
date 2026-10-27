@@ -63,7 +63,7 @@ h1,h2{font-family:var(--display);margin:0;text-wrap:balance}
 /* Highway sign */
 .sign{background:var(--grad);color:var(--sign-fg);border-radius:22px;padding:20px 22px;box-shadow:var(--glow)}
 .sign .eyebrow{color:var(--sign-fg);opacity:.9}
-.chip{display:inline-flex;align-items:center;gap:6px;margin-top:12px;padding:6px 12px;border-radius:999px;background:#fff;color:#c13584;font-weight:700;font-size:14px;font-variant-numeric:tabular-nums}
+.chip{display:inline-flex;align-items:center;gap:6px;margin-top:12px;padding:6px 12px;border-radius:999px;background:rgba(255,255,255,.2);color:#fff;font-weight:700;font-size:14px;font-variant-numeric:tabular-nums}
 .chip.soon{background:#fff;color:#c13584}
 .chip.late{background:rgba(0,0,0,.25)}
 @media (prefers-reduced-motion:no-preference){.chip.soon{animation:pulse 1.6s ease-in-out infinite}}
@@ -105,7 +105,8 @@ button.chip{border:none;font-family:inherit;cursor:pointer}
 .chip.go:active{transform:scale(.97)}
 .chip.go:focus-visible{outline:3px solid #fff;outline-offset:3px}
 .go-arrow{display:inline-grid;place-items:center;width:22px;height:22px;margin-left:2px;border-radius:50%;background:linear-gradient(135deg,#8134af,#e1306c);color:#fff;font-size:13px;font-weight:800}
-.chip.go.on .go-arrow{background:#f6e3ee;color:#c13584;font-size:11px}
+.chip.go.on{color:#fff;-webkit-text-fill-color:#fff}
+.chip.go.on .go-arrow{background:rgba(0,0,0,.14);color:#fff;font-size:11px}
 .wx{display:inline-flex;align-items:center;gap:5px;margin-top:5px;padding:2px 9px;border-radius:999px;background:var(--bg);border:1px solid var(--line);font-size:13px;font-weight:600;color:var(--fg)}
 .wx .pop{color:var(--muted);font-weight:600}
 .flag{display:inline-block;margin-top:6px;padding:3px 8px;border-radius:6px;font-size:13px;font-weight:600}
