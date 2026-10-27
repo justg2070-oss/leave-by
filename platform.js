@@ -155,7 +155,8 @@ window.FEATURES = { shifts: true, transit: false };
       options: {
         redirectTo: location.origin + location.pathname,
         scopes: GCAL_SCOPE,
-        queryParams: { include_granted_scopes: "true" },
+        // Always show Google's permission screen so people can see exactly what Leave By asks for.
+        queryParams: { include_granted_scopes: "true", prompt: "consent" },
       },
     });
     if (error) return fail("upstream_error", error.message);
