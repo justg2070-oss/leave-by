@@ -88,8 +88,9 @@ h1,h2{font-family:var(--display);margin:0;text-wrap:balance}
 .stop.drive .dot{width:12px;height:12px;border-width:0;background:var(--amber);margin-top:5px}
 /* Live progress along today's route: pink fill up to now, white dot where you are */
 .dot{z-index:2}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);background:var(--bg);z-index:60;pointer-events:none}
 .rail .fill{position:absolute;left:50%;width:4px;margin-left:-2px;border-radius:2px;background:linear-gradient(#e1306c,#c13584);z-index:1}
-.rail .fill.seg{top:10px;height:calc((100% - 10px) * var(--p,0))}
+.rail .fill.span{top:10px;height:calc((100% - 10px) * var(--p,0))}
 .rail .fill.lead{top:0;height:10px}
 .stop.reached .dot{border-color:#e1306c}
 .stop.reached.drive .dot{background:#e1306c}
@@ -650,7 +651,7 @@ input[type=number]{font-family:var(--mono)}
       const span=Math.max(1,nx.time-s.time), f=Math.min(1,Math.max(0,(nowM-s.time)/span));
       return {reached,p:f,here:f>0&&f<1};
     });
-    r.innerHTML=p.steps.length?p.steps.map((s,i)=>`<li class="stop ${s.type} ${prog[i].reached?"reached":""}" style="--p:${prog[i].p.toFixed(3)}"><div class="t">${fmt(s.time).replace(" ","&nbsp;")}</div><div class="rail">${i>0&&prog[i].reached?'<span class="fill lead"></span>':""}${prog[i].p>0?'<span class="fill seg"></span>':""}<span class="dot"></span>${prog[i].here?'<span class="here" role="img" aria-label="You are here"></span>':""}</div><div class="body"><div class="name">${esc(s.name)}</div><div class="sub">${esc(s.sub)}</div>${s.wx?wxChip(s.wx):""}${s.flag?`<span class="flag ${s.flag.k}">${esc(s.flag.msg)}</span>`:""}${s.leg&&transit?compareHtml(s):""}</div></li>`).join(""):`<li class="empty">No stops on ${LONG[selDate.getDay()]}.</li>`;
+    r.innerHTML=p.steps.length?p.steps.map((s,i)=>`<li class="stop ${s.type} ${prog[i].reached?"reached":""}" style="--p:${prog[i].p.toFixed(3)}"><div class="t">${fmt(s.time).replace(" ","&nbsp;")}</div><div class="rail">${i>0&&prog[i].reached?'<span class="fill lead"></span>':""}${prog[i].p>0?'<span class="fill span"></span>':""}<span class="dot"></span>${prog[i].here?'<span class="here" role="img" aria-label="You are here"></span>':""}</div><div class="body"><div class="name">${esc(s.name)}</div><div class="sub">${esc(s.sub)}</div>${s.wx?wxChip(s.wx):""}${s.flag?`<span class="flag ${s.flag.k}">${esc(s.flag.msg)}</span>`:""}${s.leg&&transit?compareHtml(s):""}</div></li>`).join(""):`<li class="empty">No stops on ${LONG[selDate.getDay()]}.</li>`;
 
     // schedule list
     const sl=document.getElementById("schedList");
