@@ -329,7 +329,7 @@ input[type=number]{font-family:var(--mono)}
   <section class="import" id="importBox" hidden>
     <div>
       <h2>Import from a screenshot</h2>
-      <p class="note">Snap your MyUW schedule or a shift calendar. Claude reads it and you choose what to add.</p>
+      <p class="note">Snap your MyUW schedule or a shift calendar. Leave By reads it and you choose what to add.</p>
     </div>
     <label class="drop" for="shot">
       <input id="shot" type="file" accept="image/*">
@@ -766,10 +766,10 @@ input[type=number]{font-family:var(--mono)}
       iResults.innerHTML=found.map((x,i)=>`<label class="pick"><input type="checkbox" id="pick-${i}" checked><span><b>${esc(x.label)}</b><br><span class="meta" style="color:var(--muted);font-size:14px">${x.days.map(d=>DAY_NAMES[d]).join("/")} · ${fmt(toMin(x.start))}–${fmt(toMin(x.end))}${x.location?" · "+esc(x.location):""}</span></span></label>`).join("")+
         `<button class="btn" id="addFound" type="button" style="width:100%;margin-top:8px">Add checked to schedule</button>`;
     }catch(e){
-      const msg={not_granted:"Claude access wasn't allowed, so the screenshot can't be read. You can still add items by hand below.",
+      const msg={not_granted:"Screenshot import isn't available right now. You can still add items by hand below.",
         rate_limited:"You've hit a usage limit. Try again in a bit.",image_rejected:"That file couldn't be read. Try a PNG or JPG screenshot.",
-        invalid_json:"Claude's answer didn't come back in a usable format. Tap Read schedule to try again.",
-        refused:"Claude couldn't read that image. Try a different screenshot."}[e&&e.code];
+        invalid_json:"Couldn't make sense of that screenshot. Tap Read schedule to try again.",
+        refused:"Couldn't read that image. Try a different screenshot."}[e&&e.code];
       iStatus.textContent=msg||"Something went wrong reading the screenshot. Tap Read schedule to try again.";
       if(e&&e.code==="not_granted") document.getElementById("importBox").hidden=true;
     }finally{ readBtn.disabled=!shot.files[0]; }
@@ -790,9 +790,9 @@ input[type=number]{font-family:var(--mono)}
   const hm=dt=>String(dt.getHours()).padStart(2,"0")+":"+String(dt.getMinutes()).padStart(2,"0");
   function errCopy(e){
     const c=e&&e.code;
-    if(c==="server_not_connected"||c==="selection_required") return "Connect Google Calendar in claude.ai Settings → Connectors, then try again.";
+    if(c==="server_not_connected"||c==="selection_required") return "Tap Sync shifts to connect Google Calendar.";
     if(c==="needs_reauth") return "Tap Sync shifts to reconnect Google Calendar.";
-    if(c==="not_in_manifest") return "Google Calendar access wasn't allowed for this page. You can turn it on from the page's Permissions menu.";
+    if(c==="not_in_manifest") return "Google Calendar access wasn't allowed. Tap Sync shifts to connect it again.";
     if(c==="blocked_by_policy") return "Your organization blocks Google Calendar here.";
     return "Couldn't reach Google Calendar. Tap Sync shifts to try again.";
   }
