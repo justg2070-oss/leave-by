@@ -575,9 +575,21 @@ input[type=number]{font-family:var(--mono)}
   function startTrip(k){
     const now=new Date(), today=ymd(now);
     const kept={}; Object.entries(state.trips||{}).forEach(([x,v])=>{ if(x.startsWith(today+"|")) kept[x]=v; });
-    kept[k]=now.getHours()*60+now.getMinutes(); state.trips=kept; save(); render();
+    kept[k]=now.getHours()*60+now.getMinutes(); state.trips=kept; paused=null; save(); render();
   }
-  function undoTrip(k){ if(state.trips){ delete state.trips[k]; save(); render(); } }
+  // Untapped after 10+ min on the road: remember where you were so you can resume.
+  // Kept only in memory, so leaving the site and coming back starts fresh.
+  let paused=null;
+  function undoTrip(k){
+    if(!state.trips) return;
+    const st=tripStart(k), n=new Date(), nowM=n.getHours()*60+n.getMinutes();
+    paused=(st!=null&&nowM-st>=10)?{k,start:st}:null;
+    delete state.trips[k]; save(); render();
+  }
+  function resumeTrip(k){
+    if(!paused||paused.k!==k) return;
+    state.trips=Object.assign({},state.trips||{}); state.trips[k]=paused.start; paused=null; save(); render();
+  }
   function plan(dt){
     const evs=eventsOn(dt), dk=ymd(dt);
     const steps=[], legs=[], drives=[]; let here=state.home, freeAt=null; let firstLeave=null; let conflicts=0;
@@ -670,7 +682,10 @@ input[type=number]{font-family:var(--mono)}
           if(homeNow||mins<=0) label=`Leave now · ${driveMins} min drive`;
           else if(mins<=15) label=`Head out soon · ${mins} min`;
           else label=`⏱ ${mins>=60?Math.floor(mins/60)+" h "+(mins%60)+" min":mins+" min"}`;
-          chip=tappable
+          const resume=tappable&&paused&&paused.k===dr.key;
+          chip=resume
+            ?`<button type="button" class="chip soon go" data-resume="${esc(dr.key)}" aria-label="Resume your trip. You left at ${fmt(paused.start)}.">↺ Resume · left ${fmt(paused.start)}<span class="go-arrow" aria-hidden="true">→</span></button>`
+            :tappable
             ?`<button type="button" class="chip soon go" data-leave="${esc(dr.key)}" aria-label="${esc(label)}. Tap when you leave.">${label}<span class="go-arrow" aria-hidden="true">→</span></button>`
             :`<span class="chip ${mins<=15?"soon":""}">${label}</span>`; }
         if(dr.departed){
@@ -1032,7 +1047,8 @@ input[type=number]{font-family:var(--mono)}
 
   document.getElementById("sign").addEventListener("click",e=>{
     const go=e.target.closest("[data-leave]"); if(go){ startTrip(go.dataset.leave); return; }
-    const un=e.target.closest("[data-undo]"); if(un){ undoTrip(un.dataset.undo); }
+    const un=e.target.closest("[data-undo]"); if(un){ undoTrip(un.dataset.undo); return; }
+    const rs=e.target.closest("[data-resume]"); if(rs){ resumeTrip(rs.dataset.resume); }
   });
 
   // ---- Live traffic (TomTom) ----
