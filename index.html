@@ -89,6 +89,8 @@ h1,h2{font-family:var(--display);margin:0;text-wrap:balance}
 .stop .body{padding-bottom:18px;min-width:0}
 .stop .name{font-weight:800}
 .stop .sub{color:var(--muted);font-size:14px}
+.wx{display:inline-flex;align-items:center;gap:5px;margin-top:5px;padding:2px 9px;border-radius:999px;background:var(--bg);border:1px solid var(--line);font-size:13px;font-weight:600;color:var(--fg)}
+.wx .pop{color:var(--muted);font-weight:600}
 .flag{display:inline-block;margin-top:6px;padding:3px 8px;border-radius:6px;font-size:13px;font-weight:600}
 .flag.warn{background:var(--warn-bg);color:var(--warn-fg)}
 .flag.bad{background:var(--bad-bg);color:var(--bad-fg)}
@@ -515,6 +517,34 @@ input[type=number]{font-family:var(--mono)}
     return state.events.filter(e=>e.days.includes(d)).concat(shifts).sort((a,b)=>toMin(a.start)-toMin(b.start));
   }
   // Live drive times from TomTom, kept in memory: from>to>date>arrive-minute -> {mins, delay}
+  // ---- Weather at each place (Open-Meteo, from the place's saved address; no personal location) ----
+  const WX={}, WX_PENDING={};
+  const WX_CODES=[[[0],"☀️","Clear"],[[1],"🌤️","Mostly clear"],[[2],"⛅","Partly cloudy"],[[3],"☁️","Cloudy"],[[45,48],"🌫️","Fog"],
+    [[51,53,55,56,57],"🌦️","Drizzle"],[[61,63,80,81],"🌧️","Rain"],[[65,82],"🌧️","Heavy rain"],[[66,67],"🧊","Freezing rain"],
+    [[71,73,75,77,85,86],"🌨️","Snow"],[[95,96,99],"⛈️","Thunderstorms"]];
+  const wxKey=c=>c[1].toFixed(2)+","+c[0].toFixed(2);
+  function weatherAt(place,dk,min){
+    const c=coordOf(place); if(!c) return null;
+    const f=WX[wxKey(c)]; if(!f||!f.hourly) return null;
+    const hh=String(Math.min(23,Math.floor(min/60))).padStart(2,"0");
+    const i=f.hourly.time.indexOf(dk+"T"+hh+":00"); if(i<0) return null;
+    const code=f.hourly.weather_code[i], m=WX_CODES.find(x=>x[0].includes(code))||[[],"🌡️","Weather"];
+    return {icon:m[1],label:m[2],temp:Math.round(f.hourly.temperature_2m[i]),pop:Math.round(f.hourly.precipitation_probability[i]||0)};
+  }
+  function wxChip(wx){
+    const w=weatherAt(wx.place,wx.dk,wx.min); if(!w) return "";
+    return `<div><span class="wx" title="Forecast at ${esc(wx.place)}">${w.icon} ${w.temp}°F <span class="pop">· ${esc(w.label)}${w.pop>=30?" · "+w.pop+"% chance":""}</span></span></div>`;
+  }
+  function queueWeather(places){
+    const want=[...new Set(places)].map(coordOf).filter(Boolean).filter(c=>{ const k=wxKey(c), f=WX[k]; return !WX_PENDING[k]&&(!f||Date.now()-f.at>30*60*1000); });
+    if(!want.length) return;
+    want.forEach(c=>{ const k=wxKey(c); WX_PENDING[k]=true;
+      const q=new URLSearchParams({latitude:c[1].toFixed(3),longitude:c[0].toFixed(3),hourly:"temperature_2m,precipitation_probability,weather_code",temperature_unit:"fahrenheit",timezone:"auto",forecast_days:"16"});
+      fetch("https://api.open-meteo.com/v1/forecast?"+q).then(r=>r.ok?r.json():null).then(j=>{
+        if(j&&j.hourly&&Array.isArray(j.hourly.time)){ WX[k]={at:Date.now(),hourly:j.hourly}; render(); }
+      }).catch(()=>{}).finally(()=>{ delete WX_PENDING[k]; });
+    });
+  }
   const LIVE={};
   const liveKey=(a,b,dk,arr)=>a+">"+b+">"+dk+">"+arr;
   const coordOf=pl=>{ const l=state.loc&&state.loc[pl]; return l&&Array.isArray(l.coord)?l.coord:null; };
@@ -537,7 +567,7 @@ input[type=number]{font-family:var(--mono)}
         steps.push({type:"drive",leg:legs[legs.length-1],driveMins:t,time:leave,name:"Leave "+here,sub:t+" min drive to "+e.place+(live?(live.delay>=2?" (live, +"+live.delay+" min traffic)":" (live, roads clear)"):"")+" + "+state.buffer+" min buffer",flag});
         if(firstLeave===null) firstLeave={time:leave,to:e,live};
       }
-      steps.push({type:"stop",time:toMin(e.start),name:e.label,sub:e.place+" · until "+fmt(toMin(e.end))});
+      steps.push({type:"stop",time:toMin(e.start),name:e.label,sub:e.place+" · until "+fmt(toMin(e.end)),wx:{place:e.place,dk,min:toMin(e.start)}});
       here=e.place; freeAt=toMin(e.end);
     });
     if(evs.length && here!==state.home){
@@ -577,11 +607,12 @@ input[type=number]{font-family:var(--mono)}
       if(isToday){ const mins=fl.time-(now.getHours()*60+now.getMinutes());
         if(mins>0) chip=`<span class="chip ${mins<=15?"soon":""}">${mins<=15?"Head out soon · ":"⏱ "}${mins>=60?Math.floor(mins/60)+" h "+(mins%60)+" min":mins+" min"}</span>`;
         else chip=`<span class="chip late">Leave time has passed</span>`; }
-      sign.innerHTML=`<div class="eyebrow">Leave ${esc(state.home)} by${extra}</div><h1>${fmt(fl.time)}</h1><p class="for">for ${esc(fl.to.label)} at ${fmt(toMin(fl.to.start))}${p.conflicts?" · ⚠️ "+p.conflicts+" conflict"+(p.conflicts>1?"s":""):""} <span class="sign-emoji" aria-hidden="true">${emojiFor(fl.to)}</span>${fl.live?`<span class="traffic">🚗 ${fl.live.delay>=2?"Traffic adds "+fl.live.delay+" min":"Live traffic · roads look clear"}</span>`:""}</p>${chip}`;
+      sign.innerHTML=`<div class="eyebrow">Leave ${esc(state.home)} by${extra}</div><h1>${fmt(fl.time)}</h1><p class="for">for ${esc(fl.to.label)} at ${fmt(toMin(fl.to.start))}${p.conflicts?" · ⚠️ "+p.conflicts+" conflict"+(p.conflicts>1?"s":""):""} <span class="sign-emoji" aria-hidden="true">${emojiFor(fl.to)}</span>${fl.live?`<span class="traffic">🚗 ${fl.live.delay>=2?"Traffic adds "+fl.live.delay+" min":"Live traffic · roads look clear"}</span>`:""}${(()=>{ const w=weatherAt(fl.to.place,ymd(selDate),toMin(fl.to.start)); return w?`<span class="traffic">${w.icon} ${w.temp}°F, ${esc(w.label)} at ${esc(fl.to.place)}${w.pop>=30?" · "+w.pop+"% chance of rain":""}</span>`:""; })()}</p>${chip}`;
     }
 
+    queueWeather(p.steps.filter(s=>s.wx).map(s=>s.wx.place).concat(p.firstLeave?[p.firstLeave.to.place]:[]));
     const r=document.getElementById("route");
-    r.innerHTML=p.steps.length?p.steps.map(s=>`<li class="stop ${s.type}"><div class="t">${fmt(s.time).replace(" ","&nbsp;")}</div><div class="rail"><span class="dot"></span></div><div class="body"><div class="name">${esc(s.name)}</div><div class="sub">${esc(s.sub)}</div>${s.flag?`<span class="flag ${s.flag.k}">${esc(s.flag.msg)}</span>`:""}${s.leg&&transit?compareHtml(s):""}</div></li>`).join(""):`<li class="empty">No stops on ${LONG[selDate.getDay()]}.</li>`;
+    r.innerHTML=p.steps.length?p.steps.map(s=>`<li class="stop ${s.type}"><div class="t">${fmt(s.time).replace(" ","&nbsp;")}</div><div class="rail"><span class="dot"></span></div><div class="body"><div class="name">${esc(s.name)}</div><div class="sub">${esc(s.sub)}</div>${s.wx?wxChip(s.wx):""}${s.flag?`<span class="flag ${s.flag.k}">${esc(s.flag.msg)}</span>`:""}${s.leg&&transit?compareHtml(s):""}</div></li>`).join(""):`<li class="empty">No stops on ${LONG[selDate.getDay()]}.</li>`;
 
     // schedule list
     const sl=document.getElementById("schedList");
