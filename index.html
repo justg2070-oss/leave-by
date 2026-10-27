@@ -86,6 +86,16 @@ h1,h2{font-family:var(--display);margin:0;text-wrap:balance}
 .stop:first-child .rail::before{top:10px}.stop:last-child .rail::before{bottom:calc(100% - 10px)}
 .dot{position:relative;width:16px;height:16px;border-radius:50%;margin-top:3px;background:var(--surface);border:4px solid var(--accent)}
 .stop.drive .dot{width:12px;height:12px;border-width:0;background:var(--amber);margin-top:5px}
+/* Live progress along today's route: pink fill up to now, white dot where you are */
+.dot{z-index:2}
+.rail .fill{position:absolute;left:50%;width:4px;margin-left:-2px;border-radius:2px;background:linear-gradient(#e1306c,#c13584);z-index:1}
+.rail .fill.seg{top:10px;height:calc((100% - 10px) * var(--p,0))}
+.rail .fill.lead{top:0;height:10px}
+.stop.reached .dot{border-color:#e1306c}
+.stop.reached.drive .dot{background:#e1306c}
+.rail .here{position:absolute;left:50%;top:calc(10px + (100% - 10px) * var(--p,0));width:14px;height:14px;margin:-7px 0 0 -7px;border-radius:50%;background:#fff;border:3px solid #e1306c;box-shadow:0 0 0 4px rgba(225,48,108,.25);z-index:3}
+@media (prefers-reduced-motion:no-preference){.rail .here{animation:herePulse 2s ease-in-out infinite}}
+@keyframes herePulse{50%{box-shadow:0 0 0 8px rgba(225,48,108,.12)}}
 .stop .body{padding-bottom:18px;min-width:0}
 .stop .name{font-weight:800}
 .stop .sub{color:var(--muted);font-size:14px}
@@ -615,7 +625,7 @@ input[type=number]{font-family:var(--mono)}
       }else{
         let chip="";
         if(isToday){ const mins=dr.time-nowMin;
-          if(dr.home&&dr.leavingNow) chip=`<span class="chip soon">Leave now · home by ${fmt(dr.arrive)}</span>`;
+          if(dr.home&&(dr.leavingNow||mins<=0)) chip=`<span class="chip soon">Leave now · home by ${fmt(Math.max(dr.arrive,nowMin+(dr.mins||0)))}</span>`;
           else if(mins>0) chip=`<span class="chip ${mins<=15?"soon":""}">${mins<=15?"Head out soon · ":"⏱ "}${mins>=60?Math.floor(mins/60)+" h "+(mins%60)+" min":mins+" min"}</span>`;
           else chip=`<span class="chip late">Leave time has passed</span>`; }
         const what=dr.home?`home by ${fmt(dr.arrive)}`:`for ${esc(dr.label)} at ${fmt(dr.eventStart)}`;
@@ -628,7 +638,16 @@ input[type=number]{font-family:var(--mono)}
 
     queueWeather(p.steps.filter(s=>s.wx).map(s=>s.wx.place));
     const r=document.getElementById("route");
-    r.innerHTML=p.steps.length?p.steps.map(s=>`<li class="stop ${s.type}"><div class="t">${fmt(s.time).replace(" ","&nbsp;")}</div><div class="rail"><span class="dot"></span></div><div class="body"><div class="name">${esc(s.name)}</div><div class="sub">${esc(s.sub)}</div>${s.wx?wxChip(s.wx):""}${s.flag?`<span class="flag ${s.flag.k}">${esc(s.flag.msg)}</span>`:""}${s.leg&&transit?compareHtml(s):""}</div></li>`).join(""):`<li class="empty">No stops on ${LONG[selDate.getDay()]}.</li>`;
+    // Where are we along today's route? Each row's line runs from its time to the next row's time.
+    const nowM=now.getHours()*60+now.getMinutes();
+    const prog=p.steps.map((s,i)=>{
+      if(!isToday) return {reached:false,p:0,here:false};
+      const nx=p.steps[i+1], reached=nowM>=s.time;
+      if(!nx) return {reached,p:0,here:false};
+      const span=Math.max(1,nx.time-s.time), f=Math.min(1,Math.max(0,(nowM-s.time)/span));
+      return {reached,p:f,here:f>0&&f<1};
+    });
+    r.innerHTML=p.steps.length?p.steps.map((s,i)=>`<li class="stop ${s.type} ${prog[i].reached?"reached":""}" style="--p:${prog[i].p.toFixed(3)}"><div class="t">${fmt(s.time).replace(" ","&nbsp;")}</div><div class="rail">${i>0&&prog[i].reached?'<span class="fill lead"></span>':""}${prog[i].p>0?'<span class="fill seg"></span>':""}<span class="dot"></span>${prog[i].here?'<span class="here" role="img" aria-label="You are here"></span>':""}</div><div class="body"><div class="name">${esc(s.name)}</div><div class="sub">${esc(s.sub)}</div>${s.wx?wxChip(s.wx):""}${s.flag?`<span class="flag ${s.flag.k}">${esc(s.flag.msg)}</span>`:""}${s.leg&&transit?compareHtml(s):""}</div></li>`).join(""):`<li class="empty">No stops on ${LONG[selDate.getDay()]}.</li>`;
 
     // schedule list
     const sl=document.getElementById("schedList");
