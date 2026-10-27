@@ -541,8 +541,12 @@ input[type=number]{font-family:var(--mono)}
       here=e.place; freeAt=toMin(e.end);
     });
     if(evs.length && here!==state.home){
-      const t=travel(here,state.home);
-      steps.push({type:"drive",time:freeAt,name:"Head home",sub:t+" min drive"});
+      // The drive home starts when the last event ends, so ask TomTom about leaving then.
+      const leg={from:here,to:state.home,dep:freeAt,dk};
+      legs.push(leg);
+      const live=LIVE[liveKey(here,state.home,dk,"d"+freeAt)]||null;
+      const t=live?live.mins:travel(here,state.home);
+      steps.push({type:"drive",time:freeAt,name:"Head home",sub:t+" min drive"+(live?(live.delay>=2?" (live, +"+live.delay+" min traffic)":" (live, roads clear)"):"")});
       steps.push({type:"stop",time:freeAt+t,name:"Home",sub:"Back by "+fmt(freeAt+t)});
     }
     return {steps,firstLeave,conflicts,count:evs.length,legs};
@@ -907,18 +911,19 @@ input[type=number]{font-family:var(--mono)}
     const now=new Date(), dk=ymd(dt);
     if(dk<ymd(now)) return;
     const nowMin=now.getHours()*60+now.getMinutes();
-    const legs=plan(dt).legs.filter(l=>coordOf(l.from)&&coordOf(l.to)&&!(dk===ymd(now)&&l.arr<=nowMin));
+    const legs=plan(dt).legs.filter(l=>coordOf(l.from)&&coordOf(l.to)&&!(dk===ymd(now)&&(l.dep!=null?l.dep:l.arr)<=nowMin));
     if(!legs.length) return;
     trafficBusy=true; let changed=false;
     try{
       for(const l of legs){
-        const arrive=new Date(dt); arrive.setHours(0,l.arr,0,0);
+        const isDep=l.dep!=null, at=new Date(dt); at.setHours(0,isDep?l.dep:l.arr,0,0);
+        const when=isDep?{departAt:at.toISOString()}:{arriveAt:at.toISOString()};
         try{
-          const r=await maps.callTool(TT,"tomtom-routing",{locations:[coordOf(l.from),coordOf(l.to)],traffic:"live",arriveAt:arrive.toISOString()},{cache:{staleTime:600000,gcTime:3600000}});
+          const r=await maps.callTool(TT,"tomtom-routing",{locations:[coordOf(l.from),coordOf(l.to)],traffic:"live",...when},{cache:{staleTime:600000,gcTime:3600000}});
           const f=r.payload&&Array.isArray(r.payload.features)&&r.payload.features[0];
           const sm=f&&f.properties&&f.properties.summary;
           if(sm&&typeof sm.travelTimeInSeconds==="number"){
-            LIVE[liveKey(l.from,l.to,l.dk,l.arr)]={mins:Math.max(1,Math.ceil(sm.travelTimeInSeconds/60)),delay:Math.round((sm.trafficDelayInSeconds||0)/60)};
+            LIVE[liveKey(l.from,l.to,l.dk,isDep?"d"+l.dep:l.arr)]={mins:Math.max(1,Math.ceil(sm.travelTimeInSeconds/60)),delay:Math.round((sm.trafficDelayInSeconds||0)/60)};
             changed=true;
           }
         }catch(e){ if(e&&["not_in_manifest","server_not_connected","needs_reauth","blocked_by_policy"].includes(e.code)) break; }

@@ -49,11 +49,12 @@ export default async function handler(req, res) {
       }
       const pts = locs.map((p) => `${+p[1]},${+p[0]}`).join(":");
       const params = new URLSearchParams({ key, traffic: "true", travelMode: "car", routeType: "fastest" });
-      // Plan for the arrival time when it's in the future; otherwise use right now.
+      // Plan for the arrival or departure time when it's in the future; otherwise use right now.
+      const iso = (t) => new Date(t).toISOString().replace(/\.\d{3}Z$/, "Z");
       const arrive = input.arriveAt ? Date.parse(input.arriveAt) : NaN;
-      if (Number.isFinite(arrive) && arrive > Date.now() + 60_000) {
-        params.set("arriveAt", new Date(arrive).toISOString().replace(/\.\d{3}Z$/, "Z"));
-      }
+      const depart = input.departAt ? Date.parse(input.departAt) : NaN;
+      if (Number.isFinite(arrive) && arrive > Date.now() + 60_000) params.set("arriveAt", iso(arrive));
+      else if (Number.isFinite(depart) && depart > Date.now() + 60_000) params.set("departAt", iso(depart));
       const r = await fetch(`${BASE}/routing/1/calculateRoute/${pts}/json?${params}`);
       if (!r.ok) return res.status(502).json({ error: "TomTom routing failed", status: r.status });
       const j = await r.json();
