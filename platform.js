@@ -10,12 +10,14 @@ window.FEATURES = { shifts: false, transit: false };
 (function () {
   let sb = null;
   let session = null;
+  let importEnabled = false;
 
   // Start up Supabase once, using public settings served by /api/config.
   const ready = (async () => {
     try {
       const res = await fetch("/api/config");
       const cfg = res.ok ? await res.json() : null;
+      importEnabled = !!(cfg && cfg.importEnabled);
       if (cfg && cfg.supabaseUrl && cfg.supabaseAnonKey && window.supabase) {
         sb = window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseAnonKey, {
           auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true },
@@ -152,12 +154,64 @@ window.FEATURES = { shifts: false, transit: false };
     },
   };
 
+  // ---------- Screenshot import (Claude reads the image on our server) ----------
+  // Shrink the photo in the browser first so uploads are fast and small.
+  async function shrinkImage(file) {
+    const url = URL.createObjectURL(file);
+    try {
+      const img = await new Promise((resolve, reject) => { const i = new Image(); i.onload = () => resolve(i); i.onerror = reject; i.src = url; });
+      const scale = Math.min(1, 1600 / Math.max(img.naturalWidth, img.naturalHeight));
+      const c = document.createElement("canvas");
+      c.width = Math.round(img.naturalWidth * scale); c.height = Math.round(img.naturalHeight * scale);
+      const ctx = c.getContext("2d"); ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, c.width, c.height);
+      ctx.drawImage(img, 0, 0, c.width, c.height);
+      const dataUrl = c.toDataURL("image/jpeg", 0.88);
+      return { mediaType: "image/jpeg", image: dataUrl.split(",")[1] };
+    } finally { URL.revokeObjectURL(url); }
+  }
+  function parseJsonLoose(text) {
+    try { return JSON.parse(text); } catch (e) {}
+    const fence = /```(?:json)?\s*([\s\S]*?)```/.exec(text);
+    if (fence) { try { return JSON.parse(fence[1]); } catch (e) {} }
+    const a = text.search(/[\[{]/), b = Math.max(text.lastIndexOf("]"), text.lastIndexOf("}"));
+    if (a >= 0 && b > a) { try { return JSON.parse(text.slice(a, b + 1)); } catch (e) {} }
+    throw { code: "invalid_json", message: "Couldn't read the answer", text };
+  }
+  async function askAboutImage(file) {
+    await ready;
+    if (!sb || !session) return fail("not_signed_in");
+    const f = Array.isArray(file) ? file[0] : (file && file.length !== undefined && !(file instanceof Blob) ? file[0] : file);
+    if (!(f instanceof Blob)) return fail("image_rejected");
+    let payload;
+    try { payload = await shrinkImage(f); } catch (e) { return fail("image_rejected"); }
+    const { data } = await sb.auth.getSession();
+    const token = data && data.session && data.session.access_token;
+    let res;
+    try {
+      res = await fetch("/api/import", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: "Bearer " + (token || "") },
+        body: JSON.stringify(payload),
+      });
+    } catch (e) { return fail("upstream_error", "network"); }
+    const j = await res.json().catch(() => ({}));
+    if (!res.ok) return fail(j.code || "upstream_error", j.error);
+    return j.text || "";
+  }
+  const sampleApi = async () => fail("not_supported");
+  sampleApi.json = async (_prompt, opts) => parseJsonLoose(await askAboutImage(opts && opts.images));
+  sampleApi.limits = async () => ({
+    maxPromptBytes: 262144,
+    images: { maxCount: 1, maxInputBytes: 20_000_000, mediaTypes: ["image/jpeg", "image/png", "image/webp", "image/gif"] },
+  });
+
   window.claude = {
     async use(name) {
       if (name === "user") { await ready; return sb ? userApi : null; }
       if (name === "db") { await ready; return sb && session ? dbApi : null; }
       if (name === "mcp") return mcpApi;
-      return null; // "sample" (screenshot import) isn't set up in this version
+      if (name === "sample") { await ready; return importEnabled && sb && session ? sampleApi : null; }
+      return null;
     },
   };
 })();

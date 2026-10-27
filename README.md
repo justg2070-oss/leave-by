@@ -12,6 +12,7 @@ Leave By is a commute-aware day planner. It looks at your classes and shifts, wo
 | `platform.js` | Connects the app to accounts (Supabase) and live traffic (our server) |
 | `api/tomtom.js` | Server function that calls TomTom with a secret key |
 | `api/config.js` | Server function that gives the page its public Supabase settings |
+| `api/import.js` | Server function that reads a schedule screenshot with Claude (signed-in users only) |
 | `supabase/schema.sql` | Database table with row-level security, so each person only sees their own data |
 
 Hosting: Vercel. Accounts and storage: Supabase with Sign in with Google. Traffic: TomTom.
@@ -35,6 +36,7 @@ You need free accounts at GitHub, Vercel, Supabase, Google Cloud, and TomTom Dev
    - `TOMTOM_KEY` — your TomTom key
    - `SUPABASE_URL` — your Supabase Project URL
    - `SUPABASE_ANON_KEY` — your Supabase anon public key
+   - `ANTHROPIC_API_KEY` — optional; turns on screenshot import (set a monthly spend limit in the Claude Console)
 3. Click **Deploy**. Copy your new address (like `leave-by.vercel.app`).
 
 ### 4. Google sign-in
@@ -51,6 +53,5 @@ Open your Vercel address, tap **☰ → Profile → Sign in with Google**, and y
 ## Not in this version yet
 - **Shift sync from Google Calendar** — needs Google's review for calendar access.
 - **Bus and train comparison** — waiting on a King County Metro (OneBusAway) data key.
-- **Screenshot import** — needs a Claude API key with billing.
 
 These are switched off with `window.FEATURES` in `platform.js` until they're connected.
