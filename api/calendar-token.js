@@ -22,7 +22,8 @@ function db(path, init = {}) {
   const url = process.env.SUPABASE_URL, key = process.env.SUPABASE_SERVICE_ROLE_KEY;
   return fetch(`${url}/rest/v1/${path}`, {
     ...init,
-    headers: { apikey: key, Authorization: `Bearer ${key}`, "Content-Type": "application/json", ...(init.headers || {}) },
+    // New Supabase secret keys (sb_secret_...) go only in the apikey header; legacy service_role JWTs also go as a Bearer token.
+    headers: { apikey: key, ...(key.startsWith("sb_") ? {} : { Authorization: `Bearer ${key}` }), "Content-Type": "application/json", ...(init.headers || {}) },
   });
 }
 
