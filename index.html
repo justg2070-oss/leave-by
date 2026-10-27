@@ -344,9 +344,9 @@ input[type=number]{font-family:var(--mono)}
   <details id="shiftBox" hidden>
     <summary>Work shifts from Google Calendar</summary>
     <div class="panel">
-      <p class="note">Pulls your next six weeks of shifts from each WhenToWork calendar. Pick where each job's shifts happen.</p>
-      <div id="calRows"><p class="note">Tap Sync shifts to find your calendars.</p></div>
-      <button class="btn" id="syncBtn" type="button">Sync shifts</button>
+      <p class="note">Connect your Google Calendar (read-only) and Leave By pulls in your next six weeks of WhenToWork shifts. Pick where each job's shifts happen.</p>
+      <div id="calRows"><p class="note">Tap below to connect Google Calendar and find your WhenToWork calendars.</p></div>
+      <button class="btn grad" id="syncBtn" type="button">Connect Google Calendar</button>
       <p class="note" id="sStatus" aria-live="polite"></p>
     </div>
   </details>
@@ -784,7 +784,7 @@ input[type=number]{font-family:var(--mono)}
   function errCopy(e){
     const c=e&&e.code;
     if(c==="server_not_connected"||c==="selection_required") return "Connect Google Calendar in claude.ai Settings → Connectors, then try again.";
-    if(c==="needs_reauth") return "Google Calendar needs to be reconnected in claude.ai Settings → Connectors.";
+    if(c==="needs_reauth") return "Tap Sync shifts to reconnect Google Calendar.";
     if(c==="not_in_manifest") return "Google Calendar access wasn't allowed for this page. You can turn it on from the page's Permissions menu.";
     if(c==="blocked_by_policy") return "Your organization blocks Google Calendar here.";
     return "Couldn't reach Google Calendar. Tap Sync shifts to try again.";
@@ -848,7 +848,13 @@ input[type=number]{font-family:var(--mono)}
       const newPlaces=cals.filter(c=>c.place===c.name&&!(state.times&&Object.keys(state.times).some(k=>k.split("|").includes(c.name))));
       sStatus.textContent=(shifts.length?"Synced "+shifts.length+" shift"+(shifts.length>1?"s":"")+" for the next six weeks.":"No shifts in the next six weeks.")+
         (newPlaces.length?" Set drive times for "+newPlaces.map(c=>c.name).join(", ")+" under Places & drive times.":"");
-    }catch(e){ sStatus.textContent=errCopy(e); }
+    }catch(e){
+      if(e&&e.code==="needs_reauth"&&window.LB){
+        if(fromClick){ sStatus.textContent="Connecting to Google Calendar…"; LB.connectCalendar().catch(()=>{ sStatus.textContent="Couldn't open Google sign-in. Try again."; }); return; }
+        sStatus.textContent="Tap Sync shifts to refresh your shifts."; return;
+      }
+      sStatus.textContent=errCopy(e);
+    }
     finally{ syncBtn.disabled=false; }
   }
   syncBtn.addEventListener("click",()=>{ if(mcp) syncShifts(true); });
@@ -856,10 +862,15 @@ input[type=number]{font-family:var(--mono)}
     try{
       if(!window.claude) return;
       if(!window.FEATURES||!FEATURES.shifts) return;
+      if(window.LB&&!(await LB.signedIn())) return;
       mcp=await claude.use("mcp");
       if(!mcp) return;
-      document.getElementById("shiftBox").hidden=false;
-      if(state.sync&&state.sync.cals&&state.sync.cals.length) syncShifts(false);
+      const box=document.getElementById("shiftBox"); box.hidden=false;
+      const connected=()=>window.LB&&LB.calendarConnected();
+      const hasCals=state.sync&&state.sync.cals&&state.sync.cals.length;
+      if(hasCals) syncBtn.textContent="Sync shifts";
+      if(window.LB&&LB.takeJustConnected()){ box.open=true; syncBtn.textContent="Sync shifts"; syncShifts(true); }
+      else if(hasCals&&connected()) syncShifts(false);
     }catch(e){}
   })();
 

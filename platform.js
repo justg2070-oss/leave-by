@@ -5,7 +5,7 @@
 //   - live traffic + address lookup: TomTom, through our /api/tomtom server function
 // Features that still depend on Claude-only connectors are switched off below.
 
-window.FEATURES = { shifts: false, transit: false };
+window.FEATURES = { shifts: true, transit: false };
 
 (function () {
   let sb = null;
@@ -26,6 +26,14 @@ window.FEATURES = { shifts: false, transit: false };
         });
         const { data } = await sb.auth.getSession();
         session = data.session;
+        // Coming back from "Connect Google Calendar": keep the calendar access token for this hour.
+        try {
+          if (localStorage.getItem("lb.gcalPending") && session && session.provider_token) {
+            localStorage.setItem("lb.gcal", JSON.stringify({ token: session.provider_token, at: Date.now() }));
+            localStorage.setItem("lb.gcalJustConnected", "1");
+          }
+          localStorage.removeItem("lb.gcalPending");
+        } catch (e) {}
       }
     } catch (e) {
       console.warn("Leave By: account service unavailable", e);
@@ -50,7 +58,7 @@ window.FEATURES = { shifts: false, transit: false };
       btn.onclick = async () => {
         btn.disabled = true;
         await sb.auth.signOut();
-        try { localStorage.removeItem("leaveby.v1"); } catch (e) {}
+        try { ["leaveby.v1", "lb.gcal", "lb.gcalPending", "lb.gcalJustConnected"].forEach((k) => localStorage.removeItem(k)); } catch (e) {}
         location.reload();
       };
     } else {
@@ -129,10 +137,63 @@ window.FEATURES = { shifts: false, transit: false };
     },
   };
 
+  // ---------- Google Calendar (read-only, straight from the browser with the user's own token) ----------
+  const GCAL_SCOPE = "https://www.googleapis.com/auth/calendar.readonly";
+  function calendarToken() {
+    try {
+      const g = JSON.parse(localStorage.getItem("lb.gcal") || "null");
+      if (g && g.token && Date.now() - g.at < 55 * 60 * 1000) return g.token;
+    } catch (e) {}
+    return null;
+  }
+  async function connectCalendar() {
+    await ready;
+    if (!sb) return fail("not_configured");
+    try { localStorage.setItem("lb.gcalPending", "1"); } catch (e) {}
+    const { error } = await sb.auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        redirectTo: location.origin + location.pathname,
+        scopes: GCAL_SCOPE,
+        queryParams: { include_granted_scopes: "true" },
+      },
+    });
+    if (error) return fail("upstream_error", error.message);
+  }
+  async function gcalGet(path, params) {
+    const token = calendarToken();
+    if (!token) return fail("needs_reauth");
+    const url = "https://www.googleapis.com/calendar/v3/" + path + (params ? "?" + new URLSearchParams(params) : "");
+    let r;
+    try { r = await fetch(url, { headers: { Authorization: "Bearer " + token } }); }
+    catch (e) { return fail("upstream_error", "network"); }
+    if (r.status === 401 || r.status === 403) { try { localStorage.removeItem("lb.gcal"); } catch (e) {} return fail("needs_reauth"); }
+    if (!r.ok) return fail("upstream_error", "status " + r.status);
+    return r.json();
+  }
+  async function googleCalendar(tool, input) {
+    if (tool === "list_calendars") {
+      const j = await gcalGet("users/me/calendarList", { maxResults: "250" });
+      const calendars = (j.items || []).map((c) => ({ id: c.id, summary: c.summaryOverride || c.summary || "", description: c.description || "", primary: !!c.primary }));
+      return { payload: { calendars } };
+    }
+    if (tool === "list_events") {
+      const toIso = (s) => { const d = new Date(s); return isNaN(d) ? undefined : d.toISOString(); };
+      const params = { singleEvents: "true", orderBy: "startTime", maxResults: String(Math.min(250, +input.pageSize || 250)) };
+      if (input.startTime) params.timeMin = toIso(input.startTime);
+      if (input.endTime) params.timeMax = toIso(input.endTime);
+      const j = await gcalGet("calendars/" + encodeURIComponent(input.calendarId || "primary") + "/events", params);
+      const events = (j.items || []).map((e) => ({ summary: e.summary || "", status: e.status, start: e.start || {}, end: e.end || {}, location: e.location || "", description: e.description || "" }));
+      return { payload: { events } };
+    }
+    return fail("server_not_connected");
+  }
+
   // Small in-memory cache so repeat traffic checks don't use up the TomTom quota.
   const ttCache = new Map();
   const mcpApi = {
     async callTool(server, tool, input) {
+      if (server === "Google Calendar") return googleCalendar(tool, input || {});
       if (server !== "TomTom Maps" || (tool !== "tomtom-geocode" && tool !== "tomtom-routing")) {
         return fail("server_not_connected");
       }
@@ -210,6 +271,10 @@ window.FEATURES = { shifts: false, transit: false };
   // ---------- Transit options (Google Routes on our server) ----------
   window.LB = {
     ready,
+    signedIn: async () => { await ready; return !!(sb && session); },
+    calendarConnected: () => !!calendarToken(),
+    connectCalendar,
+    takeJustConnected: () => { try { const v = localStorage.getItem("lb.gcalJustConnected"); localStorage.removeItem("lb.gcalJustConnected"); return !!v; } catch (e) { return false; } },
     transitEnabled: async () => { await ready; return transitEnabled; },
     async transit(from, to, arriveAt) {
       await ready;

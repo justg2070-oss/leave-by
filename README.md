@@ -52,7 +52,5 @@ You need free accounts at GitHub, Vercel, Supabase, Google Cloud, and TomTom Dev
 
 Open your Vercel address, tap **☰ → Profile → Sign in with Google**, and you're live.
 
-## Not in this version yet
-- **Shift sync from Google Calendar** — needs Google's review for calendar access.
-
-These are switched off with `window.FEATURES` in `platform.js` until they're connected.
+## Shift sync (Google Calendar)
+In Google Cloud, enable the **Google Calendar API** and add the `calendar.readonly` scope under **Google Auth Platform → Data Access**. Until Google verifies the app, people connecting their calendar see an "unverified app" screen and the app is limited to 100 users.
